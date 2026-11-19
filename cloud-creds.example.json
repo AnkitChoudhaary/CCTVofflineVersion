@@ -1,0 +1,7 @@
+{
+  "_README": "TEMPLATE ONLY — contains no real credentials. To enable cloud mode, copy this to 'cloud-creds.local.json' (same folder) and fill in your real V380 account. 'cloud-creds.local.json' is git-ignored (matches *.local.json) and is the ONLY file the app reads for credentials. Never put real credentials in this .example file, in chat, or in any committed file.",
+  "username": "YOUR_V380_LOGIN (the phone number, email, or username you log in to V380 Pro with)",
+  "password": "YOUR_V380_PASSWORD",
+  "loginType": 0,
+  "_notes": "loginType: 0 = username/password (adjust once the exact login recipe is pinned). The 9-digit device id is read automatically from LAN discovery, so it is not needed here."
+}

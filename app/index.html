@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dr. Vision Local Viewer</title>
+<style>
+  :root{ --bg:#0e1116; --panel:#171c24; --panel2:#1f2630; --line:#2a333f; --txt:#d7dee8; --mut:#8a97a6; --accent:#4aa3ff; --ok:#43c08a; --warn:#e0b341; }
+  *{box-sizing:border-box} html,body{margin:0;height:100%}
+  body{background:var(--bg);color:var(--txt);font:14px/1.4 system-ui,Segoe UI,Roboto,sans-serif;display:flex;flex-direction:column}
+  header{display:flex;align-items:center;gap:14px;padding:10px 14px;background:var(--panel);border-bottom:1px solid var(--line)}
+  header h1{font-size:15px;margin:0;font-weight:600;letter-spacing:.2px}
+  header .sp{flex:1}
+  .seg{display:inline-flex;background:var(--panel2);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .seg button{background:none;border:0;color:var(--mut);padding:6px 12px;cursor:pointer;font:inherit}
+  .seg button.on{background:var(--accent);color:#061320;font-weight:600}
+  .pill{font-size:12px;color:var(--mut);background:var(--panel2);border:1px solid var(--line);border-radius:20px;padding:3px 10px}
+  main{flex:1;display:flex;min-height:0}
+  aside{width:280px;min-width:240px;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column}
+  .sect{padding:8px 12px;border-bottom:1px solid var(--line)}
+  .sect h2{font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--mut);margin:0 0 8px}
+  select,input,button.btn{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:8px;font:inherit}
+  button.btn{cursor:pointer}button.btn:hover{border-color:var(--accent)}
+  #segs{flex:1;overflow:auto;padding:6px}
+  .segrow{display:flex;gap:8px;align-items:center;padding:8px;border-radius:8px;cursor:pointer;border:1px solid transparent}
+  .segrow:hover{background:var(--panel2)} .segrow.on{background:var(--panel2);border-color:var(--accent)}
+  .segrow .t{width:8px;height:8px;border-radius:50%;flex:none}
+  .t.continuous{background:var(--ok)} .t.motion{background:var(--warn)} .t.alarm{background:#e05a5a} .t.event{background:var(--accent)}
+  .segrow .meta{flex:1;min-width:0}
+  .segrow .time{font-variant-numeric:tabular-nums} .segrow .sub{font-size:12px;color:var(--mut)}
+  section.stage{flex:1;display:flex;flex-direction:column;min-width:0}
+  .toolbar{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .view{flex:1;display:flex;gap:8px;padding:10px;min-height:0;background:#000}
+  .lens{position:relative;flex:1;min-width:0;background:#06080c;border:1px solid var(--line);border-radius:10px;overflow:hidden;display:flex;align-items:center;justify-content:center}
+  .lens canvas{max-width:100%;max-height:100%;cursor:grab}
+  .lens canvas:active{cursor:grabbing}
+  .lens .tag{position:absolute;top:8px;left:8px;background:#000a;border:1px solid var(--line);border-radius:6px;padding:2px 8px;font-size:12px;color:var(--mut)}
+  .lens .z{position:absolute;bottom:8px;right:8px;background:#000a;border:1px solid var(--line);border-radius:6px;padding:2px 8px;font-size:11px;color:var(--mut)}
+  .lens .rot{position:absolute;bottom:8px;left:8px;background:#000a;border:1px solid var(--line);border-radius:6px;padding:3px 9px;font-size:14px;color:var(--txt);cursor:pointer;line-height:1}
+  .lens .rot:hover{border-color:var(--accent)}
+  .hide{display:none!important}
+  .controls{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--panel);border-top:1px solid var(--line)}
+  .controls input[type=range]{flex:1}
+  .ic{background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:6px 10px;cursor:pointer;font:inherit}
+  .ic:hover{border-color:var(--accent)}
+  #status{font-size:12px;color:var(--mut)}
+  .load{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;background:#000b;color:var(--mut);z-index:5}
+  .spin{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:s 1s linear infinite}
+  @keyframes s{to{transform:rotate(360deg)}}
+  video#src{display:none}
+  .tlwrap{padding:6px 12px 0;background:var(--panel);border-top:1px solid var(--line)}
+  #timeline{position:relative;height:40px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;overflow:hidden;cursor:pointer;user-select:none}
+  #tlticks{position:absolute;inset:0;pointer-events:none}
+  #tlticks .tick{position:absolute;top:0;bottom:0;border-left:1px solid #ffffff10}
+  #tlticks .tl{position:absolute;bottom:2px;font-size:9px;color:var(--mut);transform:translateX(2px)}
+  #tlblocks{position:absolute;left:0;right:0;top:9px;height:22px}
+  #tlblocks .blk{position:absolute;top:0;height:100%;border-radius:2px;min-width:1px}
+  .blk.continuous{background:var(--ok)} .blk.motion{background:var(--warn)} .blk.alarm{background:#e05a5a} .blk.event{background:var(--accent)}
+  .blk:hover{filter:brightness(1.4)}
+  #tlhead{position:absolute;top:0;bottom:0;width:2px;background:#fff;box-shadow:0 0 6px #fff9;pointer-events:none}
+  #tltip{position:absolute;top:-24px;transform:translateX(-50%);background:#000d;border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:11px;white-space:nowrap;pointer-events:none}
+  /* camera controls drawer */
+  .drawer{position:fixed;top:0;right:0;height:100%;width:350px;max-width:92vw;background:var(--panel);border-left:1px solid var(--line);z-index:30;display:flex;flex-direction:column;box-shadow:-10px 0 28px #000a}
+  .drawer.hide{display:none}
+  .dhead{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--line)}
+  .dhead b{font-size:14px}
+  .dbody{flex:1;overflow:auto;padding:8px 14px 24px}
+  .dsect h3{font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--mut);margin:14px 0 8px}
+  .ctrlrow{display:flex;align-items:center;gap:10px;margin:7px 0;min-height:28px}
+  .ctrlrow label{flex:1;font-size:13px}
+  .ctrlrow .val{font-size:12px;color:var(--mut);min-width:26px;text-align:right;font-variant-numeric:tabular-nums}
+  .ctrlrow select{background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:7px;padding:5px 6px;font:inherit;width:150px}
+  .ctrlrow input[type=range]{width:140px}
+  .switch{width:42px;height:24px;border-radius:12px;background:var(--panel2);border:1px solid var(--line);position:relative;cursor:pointer;flex:none}
+  .switch.on{background:var(--accent);border-color:var(--accent)}
+  .switch i{position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .15s}
+  .switch.on i{left:20px}
+  #ptzpad{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-width:190px;margin:6px auto}
+  #ptzpad button{background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:11px 0;font-size:15px;cursor:pointer}
+  #ptzpad button:hover{border-color:var(--accent)}
+  #ptzpad button.home{background:var(--accent);color:#061320}
+  #ptzpad button.sp{visibility:hidden}
+  .pbtn{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:9px;cursor:pointer;margin-top:8px;font:inherit}
+  .pbtn:hover{border-color:var(--accent)}
+  .note{font-size:11px;color:var(--mut);margin-top:8px;line-height:1.5}
+  /* on-video controls for fullscreen (translucent so the video shows through) */
+  .fsctrl{position:absolute;inset:0;z-index:9;pointer-events:none}
+  .fsctrl.hide{display:none}
+  .fsctrl>*{pointer-events:auto}
+  .fsptz{position:absolute;left:18px;bottom:18px;display:grid;grid-template-columns:repeat(3,44px);grid-auto-rows:44px;gap:6px;opacity:.5;transition:opacity .2s}
+  .fsptz:hover{opacity:.95}
+  .fsptz button{background:#000a;border:1px solid #ffffff55;color:#fff;border-radius:9px;font-size:16px;cursor:pointer;-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
+  .fsptz button:hover{border-color:var(--accent);background:#000c}
+  .fsptz button.sp{visibility:hidden;border:0;background:none}
+  .fsptz button[data-fshome]{background:#4aa3ffcc;color:#061320;border-color:transparent}
+  .fsbar{position:absolute;right:18px;bottom:18px;display:flex;gap:8px;opacity:.5;transition:opacity .2s}
+  .fsbar:hover{opacity:.95}
+  .fsbar button{min-width:44px;height:44px;background:#000a;border:1px solid #ffffff55;color:#fff;border-radius:9px;font-size:15px;cursor:pointer;-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
+  .fsbar button:hover{border-color:var(--accent);background:#000c}
+  .fsbar button.on{background:#c0392bcc;border-color:transparent}
+</style>
+</head>
+<body>
+<header>
+  <h1>Dr. Vision <span style="color:var(--mut);font-weight:400">· Local Viewer</span></h1>
+  <div class="seg" id="mode">
+    <button data-m="local" class="on">Local (hotspot)</button>
+    <button data-m="server">Server (cloud)</button>
+  </div>
+  <span class="pill" id="camPill">no camera</span>
+  <div class="sp"></div>
+  <span class="pill" id="share" style="cursor:pointer" title="Open on any device on the same Wi-Fi/hotspot">share ↗</span>
+  <span id="status">ready</span>
+</header>
+<main>
+  <aside>
+    <div class="sect">
+      <h2>Camera</h2>
+      <select id="cams"><option value="">Searching…</option></select>
+      <div style="height:8px"></div>
+      <button class="btn" id="rescan">Rescan hotspot</button>
+    </div>
+    <div class="sect">
+      <h2>Day</h2>
+      <select id="days"><option value="">—</option></select>
+    </div>
+    <div class="sect" style="flex:1;display:flex;flex-direction:column;min-height:0;padding:0">
+      <div style="padding:8px 12px"><h2 style="margin:0">Recordings</h2></div>
+      <div id="segs"></div>
+    </div>
+  </aside>
+  <section class="stage">
+    <div class="toolbar">
+      <button class="ic" id="live" style="font-weight:600">● LIVE</button>
+      <div class="seg" id="quality">
+        <button data-q="sd" class="on">SD</button>
+        <button data-q="hd">HD</button>
+      </div>
+      <div class="seg" id="layout">
+        <button data-l="both" class="on">Both lenses</button>
+        <button data-l="top">Top</button>
+        <button data-l="bottom">Bottom</button>
+      </div>
+      <button class="ic" id="resetZoom">Reset zoom</button>
+      <button class="ic" id="fs">Fullscreen</button>
+      <button class="ic" id="ctrlBtn">⚙ Controls</button>
+      <span id="vinfo" style="font-size:12px;color:var(--mut)"></span>
+      <span id="liveBadge" class="pill hide" style="background:#c0392b;color:#fff;border-color:#c0392b">● LIVE</span>
+    </div>
+    <div class="view" id="view">
+      <div class="lens" id="lensTop"><span class="tag">Lens 1 (top)</span><canvas></canvas><button class="rot" data-k="top" title="Rotate this view 90°">⟳</button><span class="z">1.0×</span></div>
+      <div class="lens" id="lensBottom"><span class="tag">Lens 2 (bottom)</span><canvas></canvas><button class="rot" data-k="bottom" title="Rotate this view 90°">⟳</button><span class="z">1.0×</span></div>
+      <div class="load hide" id="load"><div class="spin"></div><div id="loadtxt">Loading…</div></div>
+      <div id="fsctrl" class="fsctrl hide">
+        <div class="fsptz" title="Pan / tilt">
+          <button class="sp"></button><button data-dir="up">▲</button><button class="sp"></button>
+          <button data-dir="left">◀</button><button data-fshome="1" title="Home">⌂</button><button data-dir="right">▶</button>
+          <button class="sp"></button><button data-dir="down">▼</button><button class="sp"></button>
+        </div>
+        <div class="fsbar">
+          <button id="fsPlay" title="Play / pause">▶</button>
+          <button id="fsMute" title="Mute">🔇</button>
+          <button id="fsRotT" title="Rotate top lens">⟳¹</button>
+          <button id="fsRotB" title="Rotate bottom lens">⟳²</button>
+          <button id="fsLive" title="Live">●</button>
+          <button id="fsExit" title="Exit fullscreen">⤢</button>
+        </div>
+      </div>
+    </div>
+    <div class="tlwrap">
+      <div id="timeline" title="Day timeline — click to play">
+        <div id="tlticks"></div>
+        <div id="tlblocks"></div>
+        <div id="tlhead" class="hide"></div>
+        <div id="tltip" class="hide"></div>
+      </div>
+    </div>
+    <div class="controls">
+      <button class="ic" id="play">▶</button>
+      <span id="tcur" style="font-variant-numeric:tabular-nums">0:00</span>
+      <input type="range" id="seek" min="0" max="1000" value="0">
+      <span id="tdur" style="font-variant-numeric:tabular-nums">0:00</span>
+      <span id="clipname" style="font-size:12px;color:var(--mut);min-width:90px"></span>
+      <button class="ic" id="mute">🔇</button>
+    </div>
+  </section>
+</main>
+<div id="drawer" class="drawer hide">
+  <div class="dhead"><b>Camera controls</b><button class="ic" id="ctrlClose">✕</button></div>
+  <div class="dbody">
+    <div class="dsect">
+      <h3>Pan / tilt</h3>
+      <div id="ptzpad">
+        <button class="sp"></button><button data-dir="up" title="Tilt up">▲</button><button class="sp"></button>
+        <button data-dir="left" title="Pan left">◀</button><button class="home" id="ptzHome" title="Go to home position">⌂</button><button data-dir="right" title="Pan right">▶</button>
+        <button class="sp"></button><button data-dir="down" title="Tilt down">▼</button><button class="sp"></button>
+      </div>
+      <button class="pbtn" id="ptzRecal">Recalibrate motor</button>
+      <div class="note" id="ptznote">Press and hold an arrow to pan/tilt; release to stop. ⌂ returns to the home position.</div>
+    </div>
+    <div id="settingsHost"><div class="note">Open to read live settings from the camera…</div></div>
+  </div>
+</div>
+<video id="src" crossorigin="anonymous" playsinline></video>
+<script src="app.js"></script>
+</body>
+</html>

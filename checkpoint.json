@@ -1,0 +1,465 @@
+{
+  "project": "Dr Vision V380 Pro custom Android client",
+  "updatedDate": "2026-11-18",
+  "timezone": "Asia/Calcutta",
+  "status": "prototype_app_working",
+  "pauseReason": null,
+  "objective": "First prove that an ad-free custom Android client can retrieve and play an existing camera microSD recording over the phone hotspot. Decide product features later.",
+  "ownerDecisions": {
+    "preferredArchitecture": "Custom Android app communicates directly with camera over the same Android phone's existing hotspot",
+    "singlePhoneRequired": true,
+    "noPermanentRouterOrBroadband": true,
+    "noCompulsoryCloudSubscription": true,
+    "nearbyHistoricalPlaybackRequired": true,
+    "recordingMustContinueWhileHotspotOff": true,
+    "frontendFeaturesDeferred": true,
+    "requestedInvestigationTool": "https://github.com/morluto/rea",
+    "cameraFirmwareModification": "Not needed for the preferred approach; no firmware modification authorized or performed"
+  },
+  "camera": {
+    "ownerDescription": "Dr Vision 4+4MP Smart WiFi PTZ CCTV",
+    "amazonAsin": "B0HQNGF16Q",
+    "amazonUrl": "https://www.amazon.in/dp/B0HQNGF16Q",
+    "app": "V380 Pro",
+    "ownerReportedSoftwareVersion": "HsAwSMCD_V2.0.2.3(s:c59f9943)",
+    "lastReportedIp": "172.20.10.2",
+    "ipMayChange": true,
+    "hardwareVersion": null,
+    "androidAppVersion": "com.macrovideo.v380pro 2.2.92 (versionCode 230), installed from Play 2026-11-18 19:37",
+    "androidPhoneModel": "M2101K6P (sweetin), Android 13 / SDK 33, build TKQ1.221013.002 test-keys, adb serial 59d45ae8",
+    "apMode": "Owner could not find an AP/hotspot option in settings; absence of an option does not establish hardware incapability",
+    "ownerConfirmedWorking": "Camera connects to the phone hotspot and live activity is visible in V380 Pro",
+    "ownerProblem": "V380 Pro UI is unfriendly, has many ads, and SD playback is poor",
+    "credentials": "Not requested or stored; any future credentials must remain local and excluded from version control"
+  },
+  "observedNetworkTests": {
+    "date": "2026-11-18",
+    "computerIpv4": "172.20.10.11",
+    "subnetMask": "255.255.255.240",
+    "gateway": "172.20.10.1",
+    "target": "172.20.10.2",
+    "icmp": "One ping succeeded, approximately 10 ms, TTL 64",
+    "arp": "Local ARP entry observed",
+    "tcpPorts": [
+      8800,
+      554,
+      80,
+      443,
+      8899,
+      5050
+    ],
+    "tcpResult": "All six returned ECONNREFUSED in both restricted and normal network contexts. Only TCP connect-and-close was performed; no application payload or login sent.",
+    "udpProbe": "One unicast NVDEVSEARCH^100 packet to target UDP port 10008",
+    "udpResult": "No response during a 3.5-second observation window; no socket errors",
+    "interpretation": "Device is reachable, but expected classic V380 TCP service is not available from this computer at this time. UDP-only, newer protocol, or service/network restrictions remain hypotheses. These tests do not prove local playback is impossible, that all ports are closed, or that vendor cloud is required.",
+    "evidenceFiles": [
+      "camera-port-observations.json",
+      "camera-discovery.local.json"
+    ],
+    "probeScripts": [
+      "probe-camera.mjs",
+      "discover-camera.mjs"
+    ],
+    "settingsChanged": false,
+    "cameraAuthenticationAttempted": false,
+    "cameraRecordingsRetrieved": false
+  },
+  "research": {
+    "rea": {
+      "url": "https://github.com/morluto/rea",
+      "localDirectory": "rea",
+      "commit": "b21db3f3293bcfaffa6793be2f09b1aaf35dcc69",
+      "cloneState": "Shallow partial clone using --filter=blob:none --no-checkout. Files are not checked out; git status shows virtual deletions because of no checkout. Do not mistake this for user deletions. Read selected files with git show or prepare a scoped checkout.",
+      "inspected": [
+        "README.md",
+        "AGENTS.md",
+        "package.json",
+        ".agents/skills/reverse-engineer-anything/SKILL.md",
+        ".agents/skills/reverse-engineer-anything/references/connection-and-recovery.md",
+        ".agents/skills/reverse-engineer-anything/references/android-applications.md"
+      ],
+      "npmVersionChecked": "6.9.0",
+      "nodeRequirement": "^22.23.4 || ^24.22.1 || >=26.12.1",
+      "androidAnalysisRequirements": "Full JDK 17+ and separately supplied jadx-headless-mcp 0.7.1 JAR. Native library analysis needs an appropriate native provider such as Ghidra.",
+      "status": "REA 6.9.0 working via rea-local.sh (CLI only, no client registration). JADX analysis of base.apk done for discovery, login, SD listing entry points. Evidence IDs recorded in findings-v380pro-2.2.92.md; raw evidence under C:/Users/ankitc/cctv-v380-work/rea. Ghidra not installed; native libhsMediaLibrary.so not analysed.",
+      "purpose": "Inspect the installed V380 Pro APK and bundled native libraries to identify the exact camera discovery, authentication, live-stream and SD replay protocol. REA is an investigation tool, not the final app runtime."
+    },
+    "candidateAndroidClient": {
+      "url": "https://github.com/Munif-Khan/v380-camera-client",
+      "localDirectory": "v380-camera-client",
+      "commit": "1201cd654d8652cb157d15353e1d6ecc7e199d15",
+      "sourceInspected": [
+        "android/V380Cameras/Core/V380Client.cs",
+        "android/V380Cameras/Core/SdCardProtocol.cs",
+        "android/V380Cameras/Core/SdPlaybackProtocol.cs",
+        "android/V380Cameras/App/CameraSession.cs",
+        "android/V380Cameras/Media/ClipExporter.cs",
+        "android/V380Cameras/V380Cameras.csproj",
+        "android/V380Cameras/build.ps1",
+        ".github/workflows/build-apk.yml"
+      ],
+      "finding": "Contains real Android implementation for classic V380 TCP authentication, live media, recording listing and replay/export, with embedded WebView UI. SD playback includes firmware-specific 2016 TFV2 assumptions, including play-mode byte 2 and a 400-packet chunk limit. These assumptions are not established for this owner's camera.",
+      "compatibility": "Unverified; target TCP 8800 refused connections",
+      "buildRequirements": ".NET 10 SDK, Android workload and SDK, JDK 17",
+      "buildExecuted": false
+    },
+    "additionalReferences": [
+      "https://github.com/PyanSofyan/V380Decoder",
+      "https://github.com/26medias/V380-wifi-camera-reverse-engineering",
+      "https://github.com/kos0-CoL/v380-rea-mcp",
+      "https://github.com/umar14/v380-android",
+      "https://macro-video.com/en/support/support-faq/support-faq/v380/record-replay-1/page/5"
+    ],
+    "referenceCautions": [
+      "Public V380 projects target different protocol/firmware families. App name alone does not prove compatibility.",
+      "RTSP/live video access does not establish historical SD playback.",
+      "A custom UI can improve navigation but cannot alone fix limitations in camera media transfer or SD storage.",
+      "V380 working while the camera is on a hotspot does not prove traffic is going through a vendor relay; observe the transport before asserting it.",
+      "No exact public match for the supplied HsAwSMCD software string was found in the bounded searches."
+    ],
+    "staticFindingsFile": "findings-v380pro-2.2.92.md"
+  },
+  "workspaceTools": {
+    "systemNode": "v24.19.0, below REA 6.9.0 requirement; left unchanged",
+    "portableNode": "tools/node-v24.22.3-win-x64/node.exe",
+    "portableNodeStatus": "Downloaded from nodejs.org, SHA256 verified against official SHASUMS256.txt, extracted, and --version successfully printed v24.22.3",
+    "portableNpm": "tools/node-v24.22.3-win-x64/npm.cmd",
+    "adb": "tools/platform-tools/adb.exe",
+    "adbStatus": "2026-11-18: phone 59d45ae8 connected and authorized.",
+    "missingAtLastCheck": [
+      ".NET SDK (dotnet host present at C:/Program Files/dotnet but no SDKs listed)",
+      "Ghidra 12.1+",
+      "Android build SDK/workload",
+      "V380 Pro APK"
+    ],
+    "networkNote": "Public HTTPS/git and local camera probes may require the tool's normal-network escalation. Initial restricted HTTPS attempts failed with Windows schannel credentials errors; approved normal-context git clones worked.",
+    "configurationChanges": "No global toolchain upgrade or Codex MCP registration performed",
+    "jdk": {
+      "path": "C:/Users/ankitc/cctv-v380-work/tools/jdk/jdk-21.0.13+9",
+      "version": "Temurin 21.0.13+9 LTS",
+      "source": "github.com/adoptium/temurin21-binaries (via api.adoptium.net)",
+      "sha256": "a4dbaa05fca4bd89d84584e58c459bd732efebb1722af80ab13c6516832004f9",
+      "verified": "SHA-256 matched Adoptium API checksum; java -version ran"
+    },
+    "jadxMcpJar": {
+      "path": "C:/Users/ankitc/cctv-v380-work/tools/jadx-mcp/jadx-headless-mcp-0.7.1-all.jar",
+      "sha256": "6e5eacf500b64292bfb73c49797c1958f6ee44646e43e868039ae7feb573ff75",
+      "verified": "Matched REA pinned digest in docs/guides/android/android-analysis.md"
+    },
+    "reaCli": {
+      "path": "C:/Users/ankitc/cctv-v380-work/tools/rea-cli/node_modules/rea-agents",
+      "version": "6.9.0",
+      "wrapper": "rea-local.sh (bash, working) and rea-local.ps1 (PowerShell, same paths, not executed)",
+      "note": "frida optional install script not approved/run; not needed for static analysis"
+    },
+    "oneDriveIssue": "REA rejects OneDrive reparse-point files (input bytes changed during admission). Node, JDK, JADX JAR, REA CLI and APKs were moved/copied to C:/Users/ankitc/cctv-v380-work (not synced). The OneDrive tools/ folder keeps node and platform-tools only.",
+    "jdk25": {
+      "path": "C:/Users/ankitc/cctv-v380-work/tools/jdk25/jdk-25.0.5+8",
+      "sha256": "636bdc13dc649ddc7d5921c5c7d23cca6e44fd19d662b45cc9c02135a6c96c42",
+      "why": "Ghidra 12.2 requires JDK >=25; JADX needs 17+, so rea-local.sh JAVA_HOME now points at 25 for both"
+    },
+    "ghidra": {
+      "path": "C:/Users/ankitc/cctv-v380-work/ghidra/ghidra_12.2_PUBLIC",
+      "version": "12.2",
+      "sha256": "2c2cd776db3c1f6a097ba418922378ac3649cadd5e844a6f5f088ae628a7be67 (GitHub asset digest)",
+      "doctor": "available:true via rea-local.sh GHIDRA_INSTALL_DIR"
+    },
+    "ghidraNote": "REA Windows Ghidra only accepts PE; ELF .so decompiled via direct analyzeHeadless (ghidra-work/ghidra-run.sh + DumpFuncs.java). Felix aborted until XDG_CONFIG_HOME/XDG_CACHE_HOME/XDG_DATA_HOME were pointed at a local non-OneDrive dir; Jython is gone in 12.2 so the script is Java."
+  },
+  "resumeSteps": [
+    "Port the full flow to run on the hotspot-hosting Android phone (one-phone requirement): package v380lan/cipher/media-mp4 logic for Android (Kotlin/Java or a React-Native/Node layer).",
+    "Investigate dual-lens channel mapping (vspos/pano params) and whether a second lens needs a separate channel/stream.",
+    "Decide app UI/features (timeline, ad-free playback) now that end-to-end retrieval+playback is proven.",
+    "Optional: speed/fps accuracy from per-frame timestamps; MR/cloud fallback path if ever needed."
+  ],
+  "completionStatus": "Prototype app: SD playback + live SD/HD with audio, dual-lens + zoom, all local no cloud. Remaining: server/cloud mode, day timeline/thumbnails, then Android port.",
+  "apk": {
+    "localDir": "C:/Users/ankitc/cctv-v380-work/apk/v380pro-2.2.92-230 (outside OneDrive)",
+    "base": {
+      "sha256": "41777ca38be5fe6c74a1a73dab25b6fcf83e623533ee85a6f7a24b5276e473ff",
+      "bytes": 285952280
+    },
+    "splitArm64": {
+      "sha256": "ed38d0d7dd1f9a0067d3538fa5293f53b2ab90354dcbc8f711dcc0ed6da230d8",
+      "bytes": 43285953
+    },
+    "verified": "Pulled with read-only adb pull; local SHA-256 equals on-device sha256sum",
+    "nativeTarget": {
+      "lib": "libhsMediaLibrary.so",
+      "sha256": "3bae3985487662aa8d4a5500c848e0cdbc2f436da4039112040136dfc794a484"
+    }
+  },
+  "pendingCameraTests": {
+    "script": "discover-camera-v2.mjs",
+    "what": "Bind UDP 10008+10009, NVDEVSEARCH^100 to broadcast/255.255.255.255/unicast port 10008 x20, then TCP connect-only to 8089. No login.",
+    "status": "Completed 2026-11-18, see observedNetworkTests2",
+    "computerIp": "172.20.10.11/28 still on hotspot at 2026-11-18 ~21:00"
+  },
+  "observedNetworkTests2": {
+    "observedAt": "2026-11-18T15:31:29.933Z",
+    "approvedBy": "user (\"Yes, run it\") 2026-11-18",
+    "computerIpv4": "172.20.10.11/28",
+    "target": "172.20.10.2",
+    "ping": "Reply, 79 ms, TTL 64",
+    "method": "discover-camera-v2.mjs: UDP sockets bound 10008 (tx) and 10009 (rx); NVDEVSEARCH^100 x20 each to 172.20.10.15, 255.255.255.255 and 172.20.10.2 port 10008; then TCP connect-and-close to 8089 (no payload)",
+    "udpResult": "27 identical replies from 172.20.10.2 (source UDP 34378) received on rx 10009; 110 bytes; prefix NVDEVRESULT^300 (new IoT platform); none on 10008",
+    "replyFieldsPerParseDevice": {
+      "2": "MAC",
+      "3": "IP 172.20.10.2",
+      "4": "mask",
+      "5": "gateway",
+      "9": "port=0 -> app default 8089",
+      "12": "9-digit device ID (stored only in camera-discovery-v2.local.json)",
+      "13": "configId=0",
+      "14": "netType=1",
+      "15": "bindState=2 (meaning not yet established)",
+      "16": "configNetAbility bitmask (6 digits)",
+      "17": "specDevType=0"
+    },
+    "tcp8089": "connected in 111 ms; closed immediately; no bytes sent",
+    "interpretation": "Camera is a V380 new-platform (NVDEVRESULT^300) device answering LAN discovery. The earlier no-reply result was due to not listening on UDP 10009. TCP 8089 is open, consistent with the static finding that new-platform LAN sessions use camIP:8089. No authentication attempted; whether LAN-pass mode is available is still unknown.",
+    "settingsChanged": false,
+    "cameraAuthenticationAttempted": false,
+    "evidenceFile": "camera-discovery-v2.local.json (git-ignored, contains device ID and MAC)"
+  },
+  "lanPassword": {
+    "ownerReport": "2026-11-18: owner says a LAN-password-related option exists in V380 Pro; exact screen not yet identified",
+    "staticFindings": "See findings-v380pro-2.2.92.md section 6. App LAN-add flow retries key exchange with hard-coded factory value \"origin\"; origin==1 means factory password still in use; app then prompts to set a new LAN password. Cloud device Settings > Device password is the classic password (DeviceConfigSettingDeviceAutoPwdFragment), not the LAN password.",
+    "tested": false,
+    "changed": false
+  },
+  "protocolSpec": {
+    "frame": "16-byte LE header {cmd@0, ver@4, secureType@5, sessionByte@6, magic@7, bodyLen@12} + native-encrypted JSON body; see findings section 7",
+    "cmdCommonIot": 939722776,
+    "methodLanpassReq": 196870,
+    "methodLanpassResp": 196871,
+    "preSessionKeyHex": "363ae5281638cf84969a634e9f966a98b573d1ffe937b277d1f1d62b38748ae5",
+    "x25519": "native curve25519 (standard), app seed = 32 random ASCII chars",
+    "sessionKey": "X25519(appSeed, cameraPubKey) 32 bytes",
+    "blocker": "cipherJsonData(secureType 2) is native in libhsMediaLibrary.so; needs Ghidra to reimplement the probe"
+  },
+  "nativeCipher": {
+    "symbolImpl": "_Z14cipherJsonData21_mvt_cipher_operationiPciS0_PKcS2_ @0x9ab98 (304 bytes) in libhsMediaLibrary.so",
+    "jniWrapper": "Java_com_macrovideo_sdk_media_HSMediaLibrary_cipherJsonData @0xa5a6c",
+    "status": "decompiling with Ghidra",
+    "resolved": "secureType2=AES-128-CBC/PKCS7, secureType1=AES-128-ECB/PKCS7; AES key=key[0:16], IV=key[16:32]; op 1=enc 0=dec. Reimplemented in cipher-sectype2.mjs, self-tested.",
+    "lanpassKey": {
+      "aesKeyHex": "363ae5281638cf84969a634e9f966a98",
+      "ivHex": "b573d1ffe937b277d1f1d62b38748ae5"
+    }
+  },
+  "probe": {
+    "file": "lan-login-probe.mjs",
+    "selfTest": "X25519 two-party agreement verified; refuses to send until cipher-sectype2.mjs exists",
+    "credentials": "factory value origin default; real LAN password via env V380_LAN_PASS only",
+    "status": "complete and self-tested offline; ONE on-camera attempt pending: laptop Wi-Fi dropped off the hotspot (Media disconnected) at ~2026-11-18 21:59, camera unreachable",
+    "toRun": "node lan-login-probe.mjs <cameraIp> 8089 (factory value origin; no password change). Needs laptop reconnected to the phone hotspot and current camera IP (re-run discover-camera-v2.mjs first if IP unknown)."
+  },
+  "milestoneAuth": {
+    "date": "2026-11-19",
+    "result": "SUCCESS: lan-login-probe.mjs authenticated locally to camera 172.20.10.2:8089 with factory value origin; result.code=1000, origin=1 (factory LAN pass), 32-byte session key derived via X25519. No vendor cloud. No settings changed.",
+    "evidence": "lan-login-probe.local.json (git-ignored; holds nothing sensitive beyond camera IP)"
+  },
+  "milestoneSdList": {
+    "date": "2026-11-19",
+    "result": "SUCCESS: sd-list.mjs listed 62 SD segments locally (Nov 18: 60, Nov 19: 2) with timestamps/durations/types; no cloud. filter must be 15 (all types); mode 1=brief,2=list. Shared code in v380lan.mjs.",
+    "methodIds": {
+      "recListReq": 197152,
+      "recListResp": 197153
+    }
+  },
+  "milestoneReplay": {
+    "date": "2026-11-19",
+    "result": "Replay START accepted (code 1000) with {sts(epoch ms), pts:0, time_id, rtype}; camera returns encrypted REPLAY_CTRL_RESPONSE with media info. Media bytes stream on a SEPARATE native getter channel (getDataFromDeviceOrServer) using a per-frame media cipher (iotc_ms_frame_cipher) — not yet reversed.",
+    "method": "METHOD_ID_REPLAY_CTRL_REQUEST=197154, resp 197155"
+  },
+  "milestoneClip": {
+    "date": "2026-11-19",
+    "result": "SUCCESS: our own code retrieved an SD recording over the hotspot (no cloud), decrypted it (AES-128-CBC key=sKey[0:16] iv=sKey[16:32] no-pad per-frame), and produced a valid H.264 clip. SPS parses to 2304x2592 matching camera media info. clip-clean.local.h264 plays in VLC.",
+    "pipeline": "keyExchange -> recFileList -> replay 197154 {sts,pts=sts+1,frames:200,speed:10,mode:2,video:1,audio:1,rtype} -> media frames 0x38030820 -> AES-CBC per-frame decrypt -> strip 32B header -> Annex-B NALs",
+    "video": "H.264 High L5.1 2304x2592",
+    "audio": "codec 107 (G.711-family) 8kHz 16bit mono, not yet muxed",
+    "tools": [
+      "media-save.mjs",
+      "media-get.mjs",
+      "h264-check.mjs",
+      "v380lan.mjs",
+      "cipher-sectype2.mjs"
+    ]
+  },
+  "milestoneFullClip": {
+    "date": "2026-11-19",
+    "result": "Full 240s segment captured cleanly with media-full.mjs: 3601 video frames (81 I, 3520 P), seq 0..3600 contiguous, 45.7MB, ~22s download, valid H.264 2304x2592 ~15fps. clip-full-clean.local.h264 plays in VLC.",
+    "frameHeader": "32B: [1]=type(1=I,2=P,4=audio) [2..3]=u16 seq [6..7]=u16 size [10..11]=u16 ms; NAL at offset 32",
+    "endDetection": "sequence stall"
+  },
+  "milestoneMp4": {
+    "date": "2026-11-19",
+    "result": "clip.local.mp4: full 240s recording muxed to standard MP4 (H.264 2304x2592 @15fps + AAC-LC 8kHz mono) by our own JS muxer (mp4mux.mjs), no ffmpeg. Audio = AAC ADTS (codec 107). Validated: both tracks in mdat, durations ~240s, byte totals match. Plays in any standard player.",
+    "tools": [
+      "mp4mux.mjs",
+      "media-mp4.mjs"
+    ]
+  },
+  "corruptionFix": {
+    "date": "2026-11-19",
+    "cause": "Video frames are partially encrypted: 32-byte encrypted header (uVar6 @off22) + first uVar6 bytes (1024) of payload are AES-128-CBC; rest is plaintext. Was decrypting whole payload.",
+    "fix": "decFrame in media-mp4.mjs decrypts only header+first uVar6 bytes",
+    "status": "FIXED, video clean"
+  },
+  "dualLens": {
+    "finding": "2304x2592 frame = two 4MP lenses stacked vertically (each 2304x1296). Both in one stream. Split top/bottom for two-camera view.",
+    "userConfirmed": "one device, two lenses"
+  },
+  "appPlan": {
+    "approach": "local prototype first (web UI + Node protocol backend), then port to Android",
+    "features": [
+      "SD playback",
+      "dual-lens split view",
+      "zoom in fullscreen",
+      "server(cloud)+local modes"
+    ]
+  },
+  "prototypeApp": {
+    "date": "2026-11-19",
+    "location": "app/ (lib.mjs, server.mjs, index.html, app.js)",
+    "run": "launch config v380-app (port 8777) or node app/server.mjs",
+    "features": [
+      "discovery",
+      "day/recording browser",
+      "SD playback (clean)",
+      "dual-lens split view",
+      "Top/Bottom single lens",
+      "scroll zoom 1-8x + drag pan",
+      "fullscreen",
+      "LIVE view (dual-lens, real-time, MSE+fMP4)",
+      "Live HD (2304x2592) + audio, SD/HD toggle",
+      "day timeline + full-length loads + auto-advance"
+    ],
+    "verified": "in-browser vs camera 172.20.10.2: 31 recs listed, clip played dual-lens, zoom 3.5x",
+    "remaining": [
+      "server/cloud mode (vendor relay+account)",
+      "live view",
+      "timeline scrubber",
+      "port to Android Kotlin"
+    ]
+  },
+  "liveView": {
+    "date": "2026-11-19",
+    "method": "LIVE_CTRL 197122 {up:{quality:1,video:1,audio:1,IDRreq:1}}",
+    "stream": "sub-stream 640x720 (two 640x360 lenses stacked)",
+    "pipeline": "openLive -> fmp4.mjs (fragmented MP4) -> /api/live chunked HTTP -> browser MSE avc1.64001f",
+    "status": "WORKING: real-time dual-lens live in the prototype app",
+    "notes": "quality selects main/sub stream; could add HD main stream + live audio track later"
+  },
+  "liveHD": {
+    "date": "2026-11-19",
+    "quality": "1=SD 640x720, 2=HD 2304x2592",
+    "audio": "AAC-LC 2nd fMP4 track (fixed esds length bug); decodes, silent scene",
+    "sync": "video measured-duration from 0, audio 1024/frame from 0",
+    "ui": "SD/HD toggle, codec avc1.640033/64001f + mp4a.40.2",
+    "status": "WORKING"
+  },
+  "timelinePolish": {
+    "date": "2026-11-19",
+    "added": [
+      "24h day timeline (blocks by time-of-day, colored by type, hover time, click-to-play+seek, live playhead)",
+      "full-length clip loading (default, cached, duration spinner)",
+      "auto-advance to next segment"
+    ],
+    "verified": "END-TO-END vs camera 172.20.10.2 on 2026-11-19: 55 real recordings rendered as timeline blocks + 12 hour ticks; block-click played exact segment (idx 20 = 10:10:10, 2304x2592 dual-lens, both lenses clean incl. bottom); playhead tracked real time-of-day to 3 decimals (42.374%); seek jumped currentTime+playhead; auto-advance idx20->idx21 on 'ended'. Container click-to-time handler logic confirmed correct (off-by-one only in synthetic-coordinate test, not real block clicks).",
+    "devHook": "window.__app"
+  },
+  "sessionRaceFix": {
+    "date": "2026-11-19",
+    "bug": "Cold-cache concurrent requests (browser fires /api/days + /api/segments together) both missed sessionCache and opened parallel logins; camera rejects the second auth -> 500 'auth failed', UI stuck 'loading recordings…' / 'r.segments is not iterable'.",
+    "fix": "server.mjs getSession now dedupes in-flight logins via sessionPending Map (shared promise per ip, cleared in finally). Confirmed: cold reload loads 55 recordings with no 500."
+  },
+  "hotspotNote": "As of 2026-11-19 end-to-end test, laptop on hotspot (Wi-Fi 172.20.10.11/28), camera 172.20.10.2 reachable.",
+  "lanServerShare": {
+    "date": "2026-11-19",
+    "result": "server.mjs now binds 0.0.0.0 (was localhost-only in the startup banner) so any device on the same Wi-Fi/hotspot can open the page and watch recordings. Server remains the sole camera client (LAN password never leaves it); browsers just consume HTTP. Verified reachable at http://172.20.10.11:8777 from a non-loopback fetch. New /api/serverinfo returns LAN URLs; header 'share' pill lists them and copies the one on the camera's subnet (172.20.10.11). Override bind with env V380_HOST.",
+    "security": "Exposes the live/recordings to anyone on that network by design (user requested). No auth on the local web UI."
+  },
+  "screenRotation": {
+    "date": "2026-11-19",
+    "result": "Per-lens digital rotation (⟳ button on each lens, 90° steps) with correct aspect-fit + pan clamping for 90/270; drawLens rotates via canvas transform. Persisted to localStorage key 'v380.viewPrefs' (rotation per lens + layout), restored on next launch, applies in fullscreen (canvas is inside #view). Verified: rotate bottom to 90°, reload -> restored 90°. This is DIGITAL display rotation; physical PTZ rotation is separate (see pending RE).",
+    "note": "resetZoom does NOT touch rotation (rotation is a persistent preference)."
+  },
+  "cameraControlRE": {
+    "date": "2026-11-19",
+    "status": "DONE (RE): control = 3 generic methods over the existing 8089 session-keyed path. GET_PROPERTIES=197376, SET_PROPERTIES=197378, ACTION=197384, ABILITY=197386. Envelope is the same {id,method_id,chn:1,ts,params} my buildRequest already produces. Properties addressed by DPID=(group<<16)|0x100|idx, actions by DAID=(group<<16)|0x200|idx. GET params {dplist:[dpid...]} -> data.dplist_result[{dpid,value,vs,code}]; SET params {dplist:[{dpid,value,vs?}]}; ACTION params {daid,vsbmp,in}. Per-prop code 1000=ok, 1114=unsupported-on-this-device, 1103/1104=stale session (re-key). Full map in findings + agent report.",
+    "requested": "User wants: PTZ rotate controls for the moving lens, all in-app camera settings, mic mode, alarm sensor settings."
+  },
+  "cameraControls": {
+    "date": "2026-11-19",
+    "lib": "app/lib.mjs: getProps/setProps/invokeAction + DP/DA constants + ptzPreset/ptzHome/ptzRecal/setPersonDetect.",
+    "server": "app/server.mjs: /api/settings (probes a CATALOG, returns only code-1000 supported items with current values + metadata), /api/setprop (bool/int/enum/objset), /api/ptz (home|recal|preset_goto|move). CATALOG dpids curated from RE.",
+    "ui": "app/index.html + app.js: toolbar '⚙ Controls' opens a right drawer with a PTZ pad (▲◀⌂▶▼ + Recalibrate) and generic setting controls (switches/selects/sliders) grouped by section.",
+    "thisCameraSupports": "17 settings (code 1000): Image(flip=1,night=0/auto,antiflicker=0), Light(floodlight mode+sensitivity), Audio&mic(mic/spk vol=50, prompt tones, prompt lang), Motion&alarm(detection sensitivity {set:3,max:3} @0xe0103, auto-tracking=false), Recording(quality=2 HD, mode=3 continuous, audio, loop), PTZ(pan/tilt speed=8). UNSUPPORTED on this cam (code 1114): OSD clock, status LED, brightness/contrast/sharpness/saturation, legacy alarm group 10, person-detect toggle 0xe0100, av2 md/person.",
+    "verifiedVsCamera": "2026-11-19: GET returns real values; SET reversible round-trip (mic vol 50->40->50 via API; prompt-tones toggle off->on via the UI switch) both read back correctly and restored. No setting left changed.",
+    "notTriggeredInTest": "PTZ home/recal (would physically move the camera) are wired but left for the user to click.",
+    "caveats": "Enum option LABELS (flip/night/antiflicker/floodlight/rec mode/quality) are best-effort; the shown CURRENT value is from the device. 0xe0103 {set,max} labelled 'Detection sensitivity' (could be warning-light level on some firmware) — MEDIUM confidence."
+  },
+  "ptzMoveRE": {
+    "date": "2026-11-19",
+    "status": "DONE + IMPLEMENTED + VERIFIED. Native setPTZParam does NOT send a custom binary packet — it emits the SAME JSON ACTION (method_id 197384) over 0x38030818 that we already build. Move: daid=0x60200(393728), params {daid, vsbmp:1<<ch, no_rsp:true(native), in:{op,cnt}}; op stop=0/left=1/right=2/up=3/down=4, cnt=step(min1). Zoom: daid=0x60203, in:{ctrl,val}. chn=channel+1 (=1 single-lens). We omit no_rsp so request() gets an ACK.",
+    "implemented": "lib.ptzMove/ptzZoom (+PTZ_OP); server /api/ptz?cmd=move&dir=&step= and cmd=zoom; UI direction pad is press-and-hold (resend every 350ms, 'stop' op=0 on release).",
+    "verified": "2026-11-19 vs camera 172.20.10.2: API left/right/stop steps all result 1000 (ACTION_RESPONSE method_id 197385, 186ms, no timeout). UI hold-to-move: holding left sent 3 steps+stop, right 3 steps+stop (symmetric self-reverse, camera returned to origin). Home/Recal/presets wired but not auto-triggered.",
+    "evidence": "C:/Users/ankitc/cctv-v380-work/ghidra-work/out/ptz.json, actionobj.json",
+    "talkAudioTODO": "two-way talk is native two-stage: (1) negotiate ACTION method_id 0x30202 params {down:{aattr:{codec,samplerate,bits,chns}}}, (2) audio frames on MEDIA cmd 0x38030820 via iotc_ms_frame_cipher. Feasible later; needs browser mic capture + media-channel uplink. Not built.",
+    "directionFix": "2026-11-19: user reported arrows were rotated (left->down, up->left). The native RE's op labels were rotated 90deg CCW. Actual camera op meanings: 1=down, 2=up, 3=left, 4=right. lib PTZ_OP now maps UI dir->op as {up:2,down:1,left:3,right:4}. Code-verified; awaiting user's physical confirmation of all 4."
+  },
+  "fullscreenControls": {
+    "date": "2026-11-19",
+    "result": "Added #fsctrl overlay INSIDE #view so it is part of the fullscreened element. Translucent (opacity .5, hover .95, backdrop-blur) PTZ pad bottom-left + control bar bottom-right (play/pause, mute, rotate top, rotate bottom, live, exit-fullscreen). Shown only while document.fullscreenElement is set (toggled on fullscreenchange). Direction buttons share the same press-and-hold binding (querySelectorAll('[data-dir]') now covers both pads); both home buttons via '#ptzHome,[data-fshome]'. Verified overlay renders over live video with video visible through it; icons sync with play/mute/live state.",
+    "why": "user wanted camera control buttons visible on the video itself in fullscreen."
+  },
+  "androidTODO": {
+    "date": "2026-11-19",
+    "ptzButtonRemap": "User wants PTZ arrow->direction assignment to be a user-configurable SETTING in the Android app (orientation can differ by how the camera is mounted). Explicitly DO NOT add this remap UI to the Windows/web prototype — keep the current fixed mapping (PTZ_OP {up:2,down:1,left:3,right:4}) in lib.mjs. For Android: expose a 'PTZ direction mapping / image orientation' setting that lets the user reassign up/down/left/right to ops, persisted. The op-to-direction choices are the 24 permutations; simplest UI = 'calibrate' flow (press an arrow, pick which way it actually moved).",
+    "portGoal": "After cloud mode: build the full user-friendly Android app with ALL features (local+cloud, dual-lens, zoom, rotation+persist, timeline, live SD/HD+audio, PTZ, settings, mic, alarm, this PTZ-remap setting)."
+  },
+  "cloudModeRE": {
+    "date": "2026-11-19",
+    "status": "RE DONE. KEY RESULT: the remote path reuses our LAN IoT protocol almost unchanged. Remote vs local differs only in (1) session-key source and (2) a 64-byte relay-forward header (cmd 1200) on OUTBOUND frames; the 16-byte 0x38030818 header + AES-128-CBC(sKey) body + all methods (GET/SET/ACTION 197376/197378/197384, live 197122, replay 197154) are identical inside the tunnel. sKey still = X25519(appSeed, devicePub).",
+    "hosts": "api/account+device-list: https://mapi.av380.net ; dispatch (relay alloc): http://dispatch.av380.net:8001/api/v1/get_stream_server ; key-exch: http://secret.av380.net/v1/app/exch ; bind/online: http://tmpalive.av380.net . Login servers msglogin(t).av380.net:8443; temp acct rapi.av380.net.",
+    "remoteFlow": "login(user/login -> sAccessToken) -> device/binds (get dev_id, p_key=base64 X25519 pub, password, online_stat[101=LAN], pver) -> if online_stat!=101: dispatch(get_stream_server, sign=sha1('dev_id=..&platform=20001&timestamp=..hsdata2022')) -> createRelaySession(access_token+device_id -> {app_trs_ip,app_trs_port,channel_handle,channel_token,uuid}; code 1012=offline) -> [pver>=5: MQTT wake, broker url dynamic] -> TCP connect app_trs_ip:app_trs_port -> forward-attach 1500B [1100][devId][channel_handle][token<=36] -> read 64B expect [1101][..][1000] -> TSK key-exch (method 196872 plaintext {uuid,cS=base64(sha256(appPub))} -> data.pubKC -> sKey) OR http /v1/app/exch using p_key -> drive control/live/replay with our lib, wrapping outbound in the 64B 1200 header.",
+    "scaffold": "v380cloud.mjs created (parent folder): HOSTS, accountLogin, getDeviceList, dispatchRelay, createRelaySession, forwardAttachBuffer, wrapMR/stripMR, tskExchangeOverTunnel, openRemoteSession. Reuses v380lan X25519 + cipher-sectype2. Syntax-checked; primitives unit-smoke-tested (wrapMR 64B header, forwardAttach 1500B). NOT run against live servers yet (needs creds; avoid login lockout).",
+    "gaps": "Remaining after login/bind pinned: (A) MQTT broker host/port/creds + mqExchangePublish wake topic for pver>=5 (dynamic/unknown, biggest remaining unknown for fully-remote). (B) this camera's pver unknown. (C) inbound relay framing asymmetry (stripMR tolerant). (D) createRelaySession exact path/shape (guessed /v1/app/call).",
+    "loginBindRecipePinned": {
+      "date": "2026-11-19",
+      "login": "POST https://mapi.av380.net/user/login, body {username, password: lowerhex(AES-128-ECB/PKCS5(password,'1234567890123456')), phonetoken:'100', timestamp:<unixSec>, sign}. sign = md5(alphabetical 'k=v&...' of those fields + salt 'hsshop2016'). No headers/app_key. Success: result===0 && error_code===0; token at data.access_token; userId at data.user_id.",
+      "bind": "NEW-platform (our cam) = POST https://mapi.av380.net/device/update-info, body {accesstoken, deviceaccount:'admin', deviceid:<int>, devicemodel:0, devicepassword: base64(AES-128-ECB/PKCS5(adminPassword, randkey8+'hongshi1')), groupid:0, nickname, randkey:<8 alnum>, timestamp:'<unixSec str>', ver:2, sign(salt hsshop2016)}. Success: (result===0&&error_code===0) || error_code===10004(already bound). No device-local bind-token needed (admin pw proven client-side).",
+      "deviceList": "POST device/list body {accesstoken,get_sub_server,language,registrationid,timestamp,type:'all',ver:1008,sign} -> entries carry p_key,online_stat(101=LAN),pver.",
+      "salts": "mapi calls: md5 sign salt 'hsshop2016'. dispatch: sha1 salt 'hsdata2022'. IoT /v1/app/bind: md5(md5(json+ts)+'UmAqaq!EnHS7^92a'). All verbatim from OkHttpUtil/DispatchUtils.",
+      "implemented": "v380cloud.mjs accountLogin/bindDevice/getDeviceList/checkBindStatus. Crypto unit-validated (AES-ECB round-trip, 16-byte devpw key, 32-hex sign). NOT run live yet.",
+      "adminPwHypothesis": "device 'admin' password for bind is unknown; best guess = the LAN factory pass 'origin' (what our X25519 LAN login uses). Try that first, inspect error_code.",
+      "evidence": "rea/src/com.macrovideo.v380pro.utils.OkHttpUtil.java (accountLogin ~3898, updateDevice ~1333), Aes.java, GlobalDefines.java."
+    },
+    "credsFile": "2026-11-19: cloud-creds.local.json saved by user (UTF-8 BOM; runner strips it). Reads only {username,password}.",
+    "liveRun": {
+      "date": "2026-11-19",
+      "runner": "cloud-bind-run.mjs (prints only status codes, never creds/token/devId/p_key).",
+      "LOGIN": "SUCCESS vs https://mapi.av380.net/user/login: result=0 error_code=0 http=200, access_token + userId returned. Our accountLogin recipe (AES-ECB pw + md5 sign salt hsshop2016) is CONFIRMED CORRECT against the live server. The laptop reached the internet via the hotspot (so the phone has mobile data).",
+      "BIND(update-info)": "FAILED: result=10005 (RESULT_CODE_NO_INFO_FOUND) error_code=22001. So device/update-info only UPDATES an already-bound device; it does NOT CLAIM an unbound one. Device list count=0, bindState still 2.",
+      "realClaimPath": "The true claim of an unbound ONLINE device is the IoT bind-ack: Protocol.METHOD_ID_IOTC_BIND_ACK_REQUEST + Protocol.createBindInfoJsonObj(mode,str,i5,qrNetContent,sLoginUserId,timeout) sent as a `tr` header to http://tmpalive.av380.net/v1/app/bind?signature= (sig = md5(md5(json+ts)+'UmAqaq!EnHS7^92a')), with mr.params.device_id. Evidence rea/src/com.macrovideo.sdk.tools.OkHttpUtils.java:780. This is the provisioning-style path (AddDeviceOnlineFragment) — more involved than a plain REST call; createBindInfoJsonObj params + METHOD_ID value not yet pinned.",
+      "decision": "Superseded — see boundAccountFound below."
+    },
+    "boundAccountFound": {
+      "date": "2026-11-19",
+      "result": "RESOLVED: user switched cloud-creds.local.json to a DIFFERENT V380 account (the first was wrong: one failed login = result 10006 LOGIN_FAIL_USERNAME_OR_PASSWORD_INCORRECT before they corrected it). The corrected account LOGS IN (result 0) and device/list returns count=1 whose device_id EXACTLY matches our LAN camera's 9-digit id (compared in code). So THE CAMERA IS ALREADY BOUND TO THIS ACCOUNT — no programmatic bind needed; the bind problem is moot.",
+      "deviceListFields": "device/list entry real field names (confirmed live): device_id, group_id(obj), model(str), device_model, public_key(base64 X25519 pub, 44ch = our p_key), ike, rk(str16), nickname, permission, type(=2), mqsl(str23), pver(=5), sub_server, p_id(=289), sort, f_id, im_off(=255), ip, service_id. NOTE: no online_stat in this payload (that comes from devcloudinfo/status). v380cloud.normalizeDevice maps these.",
+      "note": "Local discovery still shows bindState=2 for the camera, but the account authoritatively lists it — the local flag lags / differs. pver=5 => the remote relay path is the pver>=5 MQTT-wake variant (still the open gap)."
+    },
+    "relayProgress": {
+      "date": "2026-11-19",
+      "status": "IN PROGRESS: user chose Finish the relay. Launched a focused agent to pin relay-session-create + MQTT wake (pver5) + full LoginHelper.b sequence.",
+      "dispatchTest": "Live test of our dispatchRelay (POST http://dispatch.av380.net:8001/api/v1/get_stream_server {dev_id,platform:20001,timestamp,sign=sha1(..hsdata2022)}) returned http 200 but code 2001 'parse json error' -> endpoint correct, our BODY FORMAT wrong. Agent to pin exact dispatch body (maybe field names/types or non-JSON). Stopped probing to avoid hammering vendor."
+    },
+    "prevStatus": "IN PROGRESS: background agent reverse-engineering the V380 cloud/remote protocol from the decompiled APK.",
+    "knownBlockers": "Camera is bindState=2 (UNBOUND to any V380 account). Cloud/remote access needs: (1) a V380 account (user must provide creds — handle like LAN pass: env var only, never in chat/logs/VCS), (2) binding the camera to that account (changes device cloud state), (3) traffic routed through the vendor's relay servers (external). Also: remote access only works when the camera itself has internet (e.g. on a WiFi with uplink), not when it is purely on a phone hotspot that has left.",
+    "decision": "2026-11-19 user chose: YES use V380 cloud. User HAS a V380 account.",
+    "bindRecheck": "2026-11-19 re-ran discovery: bindState STILL = 2 (unbound). So the user's account exists but THIS camera is not yet added/bound to it. Must bind before cloud works — via official V380 app 'add device' (one-time, reliable) OR possibly ourselves once the bind protocol is RE'd (agent covering it). Awaiting cloud-RE agent to pick the binding method, then collect account creds via env var."
+  }
+}

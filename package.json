@@ -1,0 +1,11 @@
+{
+  "name": "cctv-offline-version",
+  "version": "0.1.0",
+  "description": "Cloud-free local client for a Dr. Vision / V380 Pro dual-lens PTZ camera (reverse-engineered protocol + web UI).",
+  "type": "module",
+  "private": true,
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node app/server.mjs"
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "observedAt": "2026-11-18T12:19:54.862Z",
+  "cameraIp": "172.20.10.2",
+  "userReportedSoftware": "HsAwSMCD_V2.0.2.3(s:c59f9943)",
+  "localAddresses": [
+    {
+      "address": "172.20.10.11",
+      "netmask": "255.255.255.240"
+    },
+    {
+      "address": "172.22.48.1",
+      "netmask": "255.255.240.0"
+    }
+  ],
+  "method": "TCP connect and close only; no application payload sent",
+  "results": [
+    {
+      "port": 8800,
+      "state": "error",
+      "elapsedMs": 2152,
+      "error": "ECONNREFUSED"
+    },
+    {
+      "port": 554,
+      "state": "error",
+      "elapsedMs": 2150,
+      "error": "ECONNREFUSED"
+    },
+    {
+      "port": 80,
+      "state": "error",
+      "elapsedMs": 2149,
+      "error": "ECONNREFUSED"
+    },
+    {
+      "port": 443,
+      "state": "error",
+      "elapsedMs": 2149,
+      "error": "ECONNREFUSED"
+    },
+    {
+      "port": 8899,
+      "state": "error",
+      "elapsedMs": 2149,
+      "error": "ECONNREFUSED"
+    },
+    {
+      "port": 5050,
+      "state": "error",
+      "elapsedMs": 2149,
+      "error": "ECONNREFUSED"
+    }
+  ]
+}
