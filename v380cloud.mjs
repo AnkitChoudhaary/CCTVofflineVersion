@@ -16,6 +16,7 @@ import net from 'node:net';
 import crypto from 'node:crypto';
 import * as v from './v380lan.mjs';
 import * as cipher from './cipher-sectype2.mjs';
+import { mqttWake } from './mqtt5.mjs';
 
 // --- hardcoded vendor hosts (verbatim from HttpUtils / HttpUrlDefines <clinit>) ---
 export const HOSTS = {
@@ -77,6 +78,48 @@ export async function getDeviceList(token) {
   return { devices: Array.isArray(list) ? list : [], status: r.status, raw: r.json };
 }
 
+// ---- 5) MQTT wake auth (PART E1): get EMQX broker url + credentials ------------------------------
+// POST https://gmdev.av380.net:8443/v1/app/login?signature=<sig>&timestamp=<ms> ;
+// sig = md5(md5(bodyStr + "oplatformV1") + ms). body {UID,atoken,pver:3,client:{AV,SV,BR}}.
+// response {code:5600, data:{url,cid,user,pass,expired}}.
+export const MQTT_LOGIN_HOST = 'gmdev.av380.net:8443';
+export async function mqttAuth(userId, token, { appVer = '7.4.5', sysVer = '13', brand = 'Android' } = {}) {
+  const ms = Date.now();
+  const bodyStr = JSON.stringify({ UID: +userId, atoken: token, pver: 3, client: { AV: appVer, SV: sysVer, BR: brand } });
+  const sig = md5hex(md5hex(bodyStr + 'oplatformV1') + ms);
+  const res = await fetch(`https://${MQTT_LOGIN_HOST}/v1/app/login?signature=${sig}&timestamp=${ms}`, { method: 'POST', headers: { 'Content-Type': 'application/json; charset=utf-8' }, body: bodyStr });
+  const text = await res.text(); let json = null; try { json = JSON.parse(text); } catch {}
+  const d = json?.data || {};
+  return { ok: json?.code === 5600 && !!d.url, code: json?.code, broker: d.url, cid: d.cid, user: d.user, pass: d.pass, expired: d.expired, status: res.status, raw: json };
+}
+
+// ---- 6) wake envelope (PART E2): RFC6238 TOTP + MessagePayloadTools.newMessageLoad --------------
+// envelope = [0x02][0x00][int32LE totp][int16LE seq=0][ AES-128-CBC/PKCS7( json, key=iv=md5(rk+"D"+devId+"U"+uid+totp) ) ]
+function totp6(keyBytes, timeSec, step = 30) {
+  const T = Math.floor(timeSec / step);
+  const msg = Buffer.alloc(8); msg.writeBigUInt64BE(BigInt(T));
+  const h = crypto.createHmac('sha1', keyBytes).update(msg).digest();
+  const o = h[h.length - 1] & 0xf;
+  const bin = ((h[o] & 0x7f) << 24) | ((h[o + 1] & 0xff) << 16) | ((h[o + 2] & 0xff) << 8) | (h[o + 3] & 0xff);
+  return String(bin % 1000000).padStart(6, '0');
+}
+export function wakeEnvelope(rk, devId, uid, jsonStr) {
+  const totpKey = crypto.createHash('sha1').update(Buffer.from(rk + '2025&N+E+W' + devId + '&' + uid, 'utf8')).digest(); // 20B
+  const totp = parseInt(totp6(totpKey, Math.floor(Date.now() / 1000)), 10);
+  const aesKey = crypto.createHash('md5').update(rk + 'D' + devId + 'U' + uid + totp, 'utf8').digest(); // 16B key=iv
+  const c = crypto.createCipheriv('aes-128-cbc', aesKey, aesKey);
+  const cipher = Buffer.concat([c.update(Buffer.from(jsonStr, 'utf8')), c.final()]);
+  const hdr = Buffer.alloc(8); hdr[0] = 2; hdr[1] = 0; hdr.writeInt32LE(totp, 2); hdr.writeInt16LE(0, 6);
+  return Buffer.concat([hdr, cipher]);
+}
+// Build the pver>=5 wake publish. Generates the app X25519 keypair used for BOTH the wake pubKC and
+// the later TSK key-exchange (pass appPriv/appPubRaw into tskExchangeOverTunnel so sKey matches).
+export function buildWake({ rk, devId, uid, mid, trsIp, trsPort, channelHandle, uuid }) {
+  const { priv, pubRaw } = v.x25519FromScalar(v.appSeed());
+  const jsonStr = JSON.stringify({ call: 1, mid, ctx: { turn: { host: trsIp, port: trsPort, hdl: channelHandle }, auth: { uuid, pubKC: pubRaw.toString('base64') } } });
+  return { topic: `CID/CID${devId}/UID/UID${uid}/call`, responseTopic: `WakeUp/${mid}`, payload: wakeEnvelope(rk, devId, uid, jsonStr), appPriv: priv, appPubRaw: pubRaw };
+}
+
 // normalize a device/list entry to the fields we use (actual JSON field names confirmed live).
 export const normalizeDevice = d => ({
   devId: d.device_id ?? d.dev_id, pKey: d.public_key ?? d.p_key, pver: d.pver,
@@ -92,22 +135,29 @@ export async function checkBindStatus(token, devId) {
 }
 
 // ---- 3) dispatch: relay (transmit) server list ----------------------------------------------------
-// Signature is SOLID: sha1("dev_id=<id>&platform=<p>&timestamp=<ts>hsdata2022").
+// POST dispatch/api/v1/get_stream_server {dev_id:<int>, platform, timestamp:<sec>, sign} ;
+// sign = sha1("dev_id=<id>&platform=<p>&timestamp=<ts>hsdata2022"). dev_id MUST be a JSON number.
 export async function dispatchRelay(devId, platform = 20001) {
   const ts = Math.floor(Date.now() / 1000);
   const sign = sha1hex(`dev_id=${devId}&platform=${platform}&timestamp=${ts}hsdata2022`);
-  const r = await postJson(`${HOSTS.dispatch}/api/v1/get_stream_server`, { dev_id: devId, platform, timestamp: ts, sign });
-  const servers = r.json?.data ?? r.json?.list ?? [];
-  return { servers, status: r.status, raw: r.json };
+  const r = await postJson(`${HOSTS.dispatch}/api/v1/get_stream_server`, { dev_id: +devId, platform, timestamp: ts, sign });
+  const servers = r.json?.data ?? r.json?.list ?? r.json?.servers ?? r.json?.mr?.result ?? [];
+  return { code: r.json?.code, servers: Array.isArray(servers) ? servers : [servers].filter(Boolean), status: r.status, raw: r.json };
 }
 
-// ---- 4) create a relay session on a transmit server ----------------------------------------------
-// GAP: exact request path/shape of callMqService is not pinned. Authorized by access_token+device_id;
-// response: { code, mr:{ result:{ trs_ip, trs_port, app_trs_ip, app_trs_port, channel_handle, channel_token, uuid } } }.
-export async function createRelaySession(host, port, token, devId, deviceIp = '', path = '/v1/app/call') {
-  const r = await postJson(`http://${host}:${port}${path}`, { access_token: token, device_id: devId, deviceIp });
-  const mr = r.json?.mr?.result ?? r.json?.data?.mr?.result ?? null;
-  return { code: r.json?.code, session: mr, status: r.status, raw: r.json };
+// ---- 4) create a relay session on a transmit server (PINNED, PART A) ------------------------------
+// POST http://<host>[:<callPort>]/v1/app/create ; header Signature = md5(md5(bodyStr+ts)+"2021Mr").
+// body {"mr":{"params":{"access_token","device_id":<int>}},"timestamp":<sec>}.
+// response {code:1000, mr:{result:{trs_ip,trs_port,channel_handle,channel_token,uuid}}} (1012=offline).
+export async function createRelaySession(host, port, token, devId) {
+  const ts = Math.floor(Date.now() / 1000);
+  const body = { mr: { params: { access_token: token, device_id: +devId } }, timestamp: ts };
+  const bodyStr = JSON.stringify(body);
+  const sig = md5hex(md5hex(bodyStr + ts) + '2021Mr');
+  const url = `http://${host}${port > 0 ? ':' + port : ''}/v1/app/create`;
+  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json; charset=utf-8', 'Signature': sig }, body: bodyStr });
+  const text = await res.text(); let json = null; try { json = JSON.parse(text); } catch {}
+  return { code: json?.code, session: json?.mr?.result ?? null, status: res.status, raw: json };
 }
 
 // ---- transport primitives (SOLID) ----------------------------------------------------------------
@@ -133,60 +183,95 @@ function plainIotFrame(methodId, params, sidByte = 0) {
   return Buffer.concat([h, body]);
 }
 
-// ---- 5) key exchange over the tunnel (method 196872) -> { sKey, sid } -----------------------------
-// Sends {uuid, cS: base64(sha256(appPub))}; response data.pubKC -> sKey = X25519(appSeed, pubKC).
-// Reuses our LAN X25519 + yields the same AES-128-CBC session key our whole lib already uses.
-export async function tskExchangeOverTunnel(sock, uuid, { timeoutMs = 8000 } = {}) {
-  const seed = v.appSeed();
-  const { priv, pubRaw } = v.x25519FromScalar(seed);
+// ---- tunnel reader: one data handler + sequential reads (raw bytes OR one IoT frame) --------------
+function makeReader(sock) {
+  let buf = Buffer.alloc(0);
+  sock.on('data', d => { if (process.env.RELAY_DEBUG) console.error('RX ' + d.length + 'B: ' + d.subarray(0, 120).toString('hex')); buf = Buffer.concat([buf, d]); });
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  return {
+    async readBytes(n, timeoutMs = 8000) {
+      const end = Date.now() + timeoutMs;
+      while (buf.length < n) { if (sock.destroyed) throw new Error('socket closed'); if (Date.now() > end) throw new Error('relay read timeout'); await sleep(40); }
+      const out = buf.subarray(0, n); buf = buf.subarray(n); return out;
+    },
+    async readIotFrame(timeoutMs = 18000) {
+      const end = Date.now() + timeoutMs;
+      for (;;) {
+        const off = (buf.length >= 64 && buf.readUInt32LE(0) === CMD_DATA_FORWARD) ? 64 : 0;
+        if (buf.length >= off + 16) { const size = buf.readUInt32LE(off + 12); if (buf.length >= off + 16 + size) { const h = buf.subarray(off, off + 16); const b = buf.subarray(off + 16, off + 16 + size); buf = buf.subarray(off + 16 + size); return { header: h, body: b }; } }
+        if (sock.destroyed) throw new Error('socket closed'); if (Date.now() > end) throw new Error('relay iot read timeout'); await sleep(40);
+      if (process.env.RELAY_DEBUG && buf.length >= 48 && !globalThis.__dumped) { globalThis.__dumped = 1; console.error('RAW INBOUND (' + buf.length + 'B):', buf.subarray(0, Math.min(buf.length, 160)).toString('hex')); }
+      }
+    },
+  };
+}
+
+// ---- 6) key exchange over the tunnel (method 196872, plaintext) -> { sKey, sid } -----------------
+// Uses the SAME app X25519 keypair as the wake (so the device derives the matching sKey).
+export async function tskExchangeOverTunnel(reader, sock, uuid, { priv, pubRaw, timeoutMs = 28000 } = {}) {
+  if (!priv || !pubRaw) { const kp = v.x25519FromScalar(v.appSeed()); priv = kp.priv; pubRaw = kp.pubRaw; }
   const cS = v.sha256(pubRaw).toString('base64');
-  sock.write(wrapMR(plainIotFrame(METHOD_TSK_EXCHANGE, { uuid, cS })));
-  const resp = await readFrame(sock, timeoutMs);               // 16-byte IoT header + (plaintext) body
-  const json = JSON.parse(resp.body.toString('latin1'));
+  const frame = wrapMR(plainIotFrame(METHOD_TSK_EXCHANGE, { uuid, cS }));
+  // The device dials the relay a variable moment after the MQTT wake, so (re)send the TSK request
+  // periodically and skip the tunnel's control/ready frames (e.g. cmd 0x30990, body len 0) until the
+  // real CMD_COMMON_IOT reply arrives.
+  let resp = null, lastSend = 0; const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (Date.now() - lastSend > 2500) { try { sock.write(frame); } catch {} lastSend = Date.now(); }
+    let fr;
+    try { fr = await reader.readIotFrame(Math.min(2600, Math.max(300, deadline - Date.now()))); }
+    catch (e) { if (sock.destroyed) throw e; continue; } // this-read timeout -> loop and resend
+    const cmd = fr.header.readUInt32LE(0);
+    if (cmd === v.CMD_COMMON_IOT) { resp = fr; break; }
+    if (process.env.RELAY_DEBUG) console.error('skip tunnel ctrl frame cmd ' + cmd + ' bodyLen ' + fr.body.length);
+  }
+  if (!resp) throw new Error('tsk: no CMD_COMMON_IOT reply within ' + timeoutMs + 'ms');
+  const sec = resp.header[5];
+  const bodyStr = (sec === 0 ? resp.body : cipher.decrypt(resp.body, v.PRE_SESSION_KEY, sec)).toString('latin1');
+  const json = JSON.parse(bodyStr);
   const pubKC = json?.data?.pubKC ?? json?.params?.data?.pubKC;
   const sid = json?.data?.sid ?? json?.params?.data?.sid ?? 0;
-  if (!pubKC) throw new Error('tsk exchange: no pubKC');
-  const sKey = v.x25519Shared(priv, Buffer.from(pubKC, 'base64'));
-  return { sKey, sid };
+  if (!pubKC) throw new Error('tsk exchange: no pubKC (resp ' + bodyStr.slice(0, 120) + ')');
+  return { sKey: v.x25519Shared(priv, Buffer.from(pubKC, 'base64')), sid };
 }
 
-// read one IoT frame (16-byte LE header + body), tolerating a leading 1200 forward header.
-function readFrame(sock, timeoutMs) {
-  return new Promise((resolve, reject) => {
-    let buf = Buffer.alloc(0);
-    const t = setTimeout(() => { cleanup(); reject(new Error('read timeout')); }, timeoutMs);
-    const onData = d => {
-      buf = stripMR(Buffer.concat([buf, d]));
-      if (buf.length < 16) return;
-      const size = buf.readUInt32LE(12);
-      if (buf.length < 16 + size) return;
-      cleanup(); resolve({ header: buf.subarray(0, 16), body: buf.subarray(16, 16 + size) });
-    };
-    const onErr = e => { cleanup(); reject(e); };
-    function cleanup() { clearTimeout(t); sock.off('data', onData); sock.off('error', onErr); }
-    sock.on('data', onData); sock.on('error', onErr);
-  });
-}
-
-// ---- high-level: open a remote (relay) session, returning a {sKey, sid, socket}-like object that
-// the existing LAN lib can drive once outbound frames are wrapped with wrapMR(). TODO: wire MQTT wake
-// for pver>=5 devices (broker URL is fetched dynamically — the main remaining unknown).
-export async function openRemoteSession({ token, devId, deviceIp = '' } = {}) {
-  const { servers } = await dispatchRelay(devId);
-  if (!servers?.length) throw new Error('no relay servers from dispatch');
-  for (const s of servers) {
-    const { session, code } = await createRelaySession(s.host ?? s.ip, s.callPort ?? s.port, token, devId, deviceIp);
-    if (code === 1012) throw new Error('device offline (1012)');
-    if (!session) continue;
-    const host = session.app_trs_ip || session.trs_ip, port = session.app_trs_port || session.trs_port;
-    const sock = net.connect({ host, port });
-    await new Promise((res, rej) => { sock.once('connect', res); sock.once('error', rej); });
-    sock.write(forwardAttachBuffer(+devId, session.channel_handle, session.channel_token));
-    const attach = await readFrame(sock, 8000);
-    if (attach.header.readUInt32LE(0) !== CMD_FORWARD_ATTACH_RESP) { sock.destroy(); continue; }
-    // TODO(pver>=5): MQTT wake (MqttHelper.mqExchangePublish) before the tunnel will carry the device.
-    const { sKey, sid } = await tskExchangeOverTunnel(sock, session.uuid);
-    return { sock, sKey, sid, mr: true, host, port };
+// ---- high-level: open a remote (relay) session -> { sock, reader, sKey, sid } --------------------
+// Full pver>=5 flow: dispatch -> create -> MQTT wake -> forward-attach -> TSK key-exchange. Once this
+// returns, drive the existing IoT lib over sock, wrapping each outbound frame with wrapMR().
+export async function openRemoteSession({ token, userId, devId, rk, pver = 5 } = {}) {
+  const disp = await dispatchRelay(devId);
+  if (!disp.servers?.length) throw new Error('dispatch: no servers (code ' + disp.code + ')');
+  let session = null, lastCode;
+  for (const s of disp.servers) {
+    const r = await createRelaySession(s.ip ?? s.host, 0, token, devId); lastCode = r.code;
+    if (r.code === 1012) throw new Error('device offline (1012)');
+    if (r.session) { session = r.session; break; }
   }
-  throw new Error('could not establish a relay session');
+  if (!session) throw new Error('create relay session failed (code ' + lastCode + ')');
+  const { trs_ip, trs_port, channel_handle, channel_token, uuid } = session;
+
+  // fire the MQTT wake (pver>=5) so the device dials the allocated relay
+  const mid = crypto.randomInt(1, 1e9);
+  const wake = buildWake({ rk, devId, uid: userId, mid, trsIp: trs_ip, trsPort: trs_port, channelHandle: channel_handle, uuid });
+  let wakePromise = Promise.resolve({ skipped: true });
+  if (pver >= 5) {
+    const auth = await mqttAuth(userId, token);
+    if (!auth.ok) throw new Error('mqtt auth failed (code ' + auth.code + ')');
+    wakePromise = mqttWake({ brokerUrl: auth.broker, cid: auth.cid, user: auth.user, pass: auth.pass, wakeTopic: wake.topic, responseTopic: wake.responseTopic, payload: wake.payload, timeoutMs: 8000 }).catch(e => ({ error: e.message }));
+  }
+
+  // connect the relay + forward-attach (1500B -> 64B [1101][1000])
+  const sock = net.connect({ host: trs_ip, port: trs_port });
+  await new Promise((res, rej) => { sock.once('connect', res); sock.once('error', rej); setTimeout(() => rej(new Error('relay connect timeout')), 8000); });
+  const reader = makeReader(sock);
+  sock.write(forwardAttachBuffer(+devId, channel_handle, channel_token));
+  const fr = await reader.readBytes(64, 8000);
+  if (fr.readUInt32LE(0) !== CMD_FORWARD_ATTACH_RESP || fr.readUInt32LE(4) !== 1000) { sock.destroy(); throw new Error('forward-attach rejected (cmd ' + fr.readUInt32LE(0) + ' result ' + fr.readUInt32LE(4) + ')'); }
+
+  // the wake reply is advisory (device may dial the relay regardless) — note it but don't fail on it;
+  // the TSK key-exchange is the real proof the device connected through the tunnel.
+  const wr = await wakePromise;
+  if (process.env.RELAY_DEBUG) console.error('WAKE: ' + (wr?.error ? 'ERROR ' + wr.error : (wr?.skipped ? 'skipped' : 'ok steps=' + (wr?.log || []).join('>') + (wr?.data ? ' respLen=' + wr.data.length : ''))));
+  const { sKey, sid } = await tskExchangeOverTunnel(reader, sock, uuid, { priv: wake.appPriv, pubRaw: wake.appPubRaw });
+  return { sock, reader, sKey, sid, mr: true, host: trs_ip, port: trs_port, wake: wr };
 }

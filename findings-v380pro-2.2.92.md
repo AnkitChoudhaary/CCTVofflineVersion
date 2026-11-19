@@ -502,3 +502,31 @@ vendor servers** (needs account credentials; keep login attempts few to avoid lo
 have its own internet for remote to work. Open items to finalise live: (1) exact `user/login` param+signature recipe;
 (2) the dynamic **MQTT broker** host/creds + wake payload for `pver≥5` (biggest unknown); (3) this camera's `pver`;
 (4) inbound relay framing (handled tolerantly by `stripMR`); (5) `createRelaySession` exact request path/shape.
+
+## 25. Cloud relay — implementation progress (2026-11-19)
+
+Relay fully reverse-engineered (§24 + the MQTT-wake pass) and now mostly implemented in `v380cloud.mjs`, with the
+HTTP chain validated LIVE against the vendor servers using the real (corrected) account:
+- **Login** ✓ live (`user/login`, result 0).
+- **Device list** ✓ live — the camera is bound to this account (`device_id` matches; fields `public_key`, `pver=5`, `rk`, `mqsl`).
+- **Dispatch** ✓ live — `POST dispatch.av380.net:8001/api/v1/get_stream_server` (dev_id as a JSON **number**, not string — that was the earlier `code 2001` bug) → **code 2000**, 3 relay servers (fields `{ip, domain, tp}`).
+- **Create relay session** ✓ live — `POST http://<relay-ip>/v1/app/create`, header `Signature = md5(md5(bodyStr+ts)+"2021Mr")`, body `{"mr":{"params":{access_token,device_id}},"timestamp"}` → **code 1000** with all tunnel fields (`trs_ip, trs_port, channel_handle, channel_token, uuid`).
+- **MQTT broker auth** ✓ live — `POST https://gmdev.av380.net:8443/v1/app/login?signature=md5(md5(body+"oplatformV1")+ms)&timestamp=ms`, body `{UID,atoken,pver:3,client:{AV,SV,BR}}` → **code 5600** with `{url(mqtts://), cid, user, pass, expired}`.
+- **Wake envelope** ✓ unit-tested — `wakeEnvelope()`/`buildWake()`: RFC6238 TOTP (SHA1 key = `sha1(rk+"2025&N+E+W"+devId+"&"+uid)`, 30s/6-digit) + `[0x02][0x00][int32LE totp][int16LE 0][AES-128-CBC/PKCS7(json, key=iv=md5(rk+"D"+devId+"U"+uid+totp))]`; topic `CID/CID<devId>/UID/UID<uid>/call`, responseTopic `WakeUp/<mid>`; embeds the app X25519 pubkey (same keypair fed to the tunnel TSK so `sKey` matches). AES decrypt round-trip verified.
+- **Forward-attach + 64-byte 1200 wrapper + TSK (method 196872)** — primitives implemented in `v380cloud.mjs`, settled at 64-byte wrapper (not 56), inbound carries the 1200 header too.
+
+**BLOCKER:** the actual MQTT connection (connect to EMQX over TLS, subscribe `WakeUp/<mid>`, publish the wake, await the success response) needs an MQTT v5 client. `npm install mqtt` was denied by the environment's safety classifier, so the final wake step + end-to-end tunnel test are pending either (a) allowing that install or (b) hand-rolling a minimal MQTT client. Everything up to and including the wake payload is done.
+
+### 25b. Relay end-to-end attempt (2026-11-19) — one step from done
+
+Hand-rolled a minimal MQTT v5 client (`mqtt5.mjs`, TLS, no deps) and wired the full `openRemoteSession()`
+(dispatch → create → MQTT auth → wake → forward-attach → TSK). Ran live. Results:
+- dispatch ✓, create ✓ (code 1000), **MQTT connect ✓ (CONNACK rc0), subscribe ✓ (SUBACK), wake publish ✓ (PUBACK)**,
+  **forward-attach ✓ ([1101][1000])**. So the entire relay plumbing + our MQTT client are correct and accepted.
+- **Remaining issue:** after the wake, the camera does NOT dial into the relay — no reply on `WakeUp/<mid>` and the
+  TSK key-exchange over the tunnel times out (no inbound frame). The device isn't acting on our wake.
+- Likely causes (not yet resolved): (a) the camera is attached to a DIFFERENT EMQX node than the one our
+  `/v1/app/login` returned, selected by the device-list **`mqsl`** field (our wake publish never reaches it unless the
+  cluster bridges); (b) a fine wake-envelope detail the device validates — RFC6238 TOTP clock window, or the exact
+  bytes of the AES/MD5 key — is slightly off, so the device receives but discards it; (c) `turn.host` should be the
+  relay domain rather than its IP. Everything up to the device-side wake is verified working.
