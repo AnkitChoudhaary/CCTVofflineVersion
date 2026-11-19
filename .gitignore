@@ -1,0 +1,25 @@
+# Gradle / Android build output (regenerable)
+.gradle/
+build/
+.cxx/
+.externalNativeBuild/
+captures/
+
+# Machine-specific
+local.properties
+
+# Logs & scratch
+*.log
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+
+# Never commit secrets (mirrors the desktop repo)
+*.local.json
+*.secret*
+.env
+credentials*
+*.keystore
+*.jks

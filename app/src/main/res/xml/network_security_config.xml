@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Local-only app: the Node engine talks cleartext to the camera (e.g. 172.20.10.x)
+         and the WebView talks cleartext to localhost. Permit cleartext globally. -->
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>
