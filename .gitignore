@@ -23,3 +23,6 @@ local.properties
 credentials*
 *.keystore
 *.jks
+
+# Session screenshots (scratch)
+shot-*.png

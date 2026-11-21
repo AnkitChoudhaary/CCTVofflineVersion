@@ -3,13 +3,18 @@ package com.drvision.cctv
 import android.app.Activity
 import android.content.Context
 import android.net.wifi.WifiManager
+import android.os.Build
 import android.os.Bundle
 import android.system.Os
 import android.util.Log
+import android.view.View
+import android.view.WindowInsets
+import android.view.WindowInsetsController
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.FrameLayout
 import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
@@ -19,6 +24,8 @@ class MainActivity : Activity() {
 
     private lateinit var webView: WebView
     private var multicastLock: WifiManager.MulticastLock? = null
+    private var customView: View? = null
+    private var customViewCallback: WebChromeClient.CustomViewCallback? = null
 
     companion object {
         private const val TAG = "V380"
@@ -44,7 +51,32 @@ class MainActivity : Activity() {
             loadWithOverviewMode = true
         }
         webView.webViewClient = WebViewClient()
-        webView.webChromeClient = WebChromeClient()
+        // Handle HTML5 fullscreen (element.requestFullscreen) — the default client ignores it.
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onShowCustomView(view: View, callback: CustomViewCallback) {
+                if (customView != null) { callback.onCustomViewHidden(); return }
+                customView = view
+                customViewCallback = callback
+                (window.decorView as FrameLayout).addView(
+                    view,
+                    FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        FrameLayout.LayoutParams.MATCH_PARENT
+                    )
+                )
+                webView.visibility = View.GONE
+                applyImmersive(true)
+            }
+            override fun onHideCustomView() {
+                val v = customView ?: return
+                (window.decorView as FrameLayout).removeView(v)
+                customView = null
+                customViewCallback?.onCustomViewHidden()
+                customViewCallback = null
+                webView.visibility = View.VISIBLE
+                applyImmersive(false)
+            }
+        }
 
         // Hold a multicast lock so UDP broadcast discovery works over the Wi-Fi hotspot.
         val wifi = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
@@ -136,6 +168,32 @@ class MainActivity : Activity() {
         for (child in children) {
             copyAsset("$assetPath/$child", File(outFile, child))
         }
+    }
+
+    private fun applyImmersive(on: Boolean) {
+        if (Build.VERSION.SDK_INT >= 30) {
+            val c = window.insetsController
+            if (on) {
+                c?.hide(WindowInsets.Type.systemBars())
+                c?.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            } else {
+                c?.show(WindowInsets.Type.systemBars())
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            window.decorView.systemUiVisibility = if (on)
+                (View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                 View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
+                 View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION)
+            else View.SYSTEM_UI_FLAG_VISIBLE
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    override fun onBackPressed() {
+        // Exit HTML5 fullscreen first (signals the page so its fullscreenchange fires and our view is torn down).
+        if (customView != null) { (webView.webChromeClient as? WebChromeClient)?.onHideCustomView(); return }
+        super.onBackPressed()
     }
 
     override fun onDestroy() {

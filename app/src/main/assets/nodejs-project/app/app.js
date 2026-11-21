@@ -101,13 +101,13 @@ $('#timeline').addEventListener('click', e => {
 
 // ---------- live view (MSE + fMP4) ----------
 let liveCtl = null;
-function stopLive() { if (liveCtl) { liveCtl.abort?.(); liveCtl = null; } $('#liveBadge').classList.add('hide'); $('#live').style.color = ''; document.querySelector('.controls').classList.remove('hide'); }
+function stopLive() { if (liveCtl) { liveCtl.abort?.(); liveCtl = null; } $('#liveBadge').classList.add('hide'); const lb = $('#live'); lb.classList.remove('on'); lb.textContent = '● Start live'; syncFsIcons(); }
 async function startLive() {
-  if (!state.ip) return;
-  stopLive(); document.querySelectorAll('.segrow').forEach(r => r.classList.remove('on'));
+  if (!state.ip) { setStatus('connect to a camera first', 'err'); return; }
+  const wasLive = !!liveCtl;
+  stopLive(); setTab('live'); document.querySelectorAll('.segrow').forEach(r => r.classList.remove('on'));
   resetZoom(); $('#load').classList.remove('hide'); $('#loadtxt').textContent = 'Connecting to live stream…';
-  setStatus('starting live…'); $('#liveBadge').classList.remove('hide'); $('#live').style.color = '#ff6b6b';
-  document.querySelector('.controls').classList.add('hide');
+  setStatus('starting live…'); $('#liveBadge').classList.remove('hide'); const lb = $('#live'); lb.classList.add('on'); lb.textContent = '■ Stop live';
   const ac = new AbortController(); liveCtl = ac;
   const ms = new MediaSource(); V.src = URL.createObjectURL(ms);
   await new Promise(r => ms.addEventListener('sourceopen', r, { once: true }));
@@ -135,7 +135,7 @@ async function startLive() {
 
 // ---------- playback ----------
 function playSegment(idx, row) {
-  stopLive();
+  stopLive(); setTab('rec');
   state.idx = idx; state.curSeg = (state.segments || [])[idx] || null;
   document.querySelectorAll('.segrow').forEach(r => r.classList.toggle('on', r === row));
   if (row) row.scrollIntoView({ block: 'nearest' });
@@ -213,8 +213,17 @@ function setLayout(l) {
   savePrefs();
 }
 
+// ---------- tabs (Live view / Recordings) ----------
+function setTab(t) {
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
+  $('#panel-live').classList.toggle('hide', t !== 'live');
+  $('#panel-rec').classList.toggle('hide', t !== 'rec');
+  setTimeout(sizeCanvases, 0);
+}
+document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => setTab(b.dataset.tab));
+
 // ---------- controls & wiring ----------
-$('#live').onclick = startLive;
+$('#live').onclick = () => { if (liveCtl) stopLive(); else startLive(); };
 state.hd = false;
 document.querySelectorAll('#quality button').forEach(b => b.onclick = () => { document.querySelectorAll('#quality button').forEach(x => x.classList.toggle('on', x === b)); state.hd = b.dataset.q === 'hd'; if (liveCtl) startLive(); });
 $('#rescan').onclick = rescan;
@@ -239,12 +248,27 @@ document.querySelectorAll('#mode button').forEach(b => b.onclick = () => { docum
 $('#resetZoom').onclick = resetZoom;
 $('#play').onclick = () => V.paused ? V.play() : V.pause();
 $('#mute').onclick = () => { V.muted = !V.muted; $('#mute').textContent = V.muted ? '🔇' : '🔊'; $('#fsMute').textContent = V.muted ? '🔇' : '🔊'; };
-$('#fs').onclick = () => { const el = $('#view'); if (document.fullscreenElement) document.exitFullscreen(); else el.requestFullscreen?.(); };
+function nativeFs() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+function inFullscreen() { return nativeFs() || document.body.classList.contains('cssfs'); }
+function exitFs() {
+  if (nativeFs()) { (document.exitFullscreen || document.webkitExitFullscreen).call(document); }
+  if (document.body.classList.contains('cssfs')) { document.body.classList.remove('cssfs'); toggleFsOverlay(); }
+}
+function enterFs() {
+  const el = $('#view');
+  const req = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (req) { try { const p = req.call(el); if (p && p.catch) p.catch(() => {}); } catch (e) {} }
+  // If native fullscreen didn't actually engage shortly after (WebView without/with a broken
+  // Fullscreen API, or no user-gesture), fall back to a CSS-maximised view.
+  setTimeout(() => { if (!nativeFs() && !document.body.classList.contains('cssfs')) { document.body.classList.add('cssfs'); toggleFsOverlay(); } }, 300);
+}
+$('#fs').onclick = () => { if (inFullscreen()) exitFs(); else enterFs(); };
 let seeking = false;
 $('#seek').addEventListener('input', () => { seeking = true; if (V.duration) { $('#tcur').textContent = fmt(V.duration * $('#seek').value / 1000); } });
 $('#seek').addEventListener('change', () => { if (V.duration) V.currentTime = V.duration * $('#seek').value / 1000; seeking = false; });
 window.addEventListener('resize', sizeCanvases);
 document.addEventListener('fullscreenchange', () => { toggleFsOverlay(); setTimeout(sizeCanvases, 50); });
+document.addEventListener('webkitfullscreenchange', () => { toggleFsOverlay(); setTimeout(sizeCanvases, 50); });
 // ---------- camera controls drawer (settings + PTZ) ----------
 const drawer = $('#drawer');
 $('#ctrlBtn').onclick = () => { if (!state.ip) { setStatus('connect to a camera first', 'err'); return; } if (drawer.classList.contains('hide')) { drawer.classList.remove('hide'); loadSettings(); } else drawer.classList.add('hide'); };
@@ -304,13 +328,13 @@ document.querySelectorAll('[data-dir]').forEach(b => {
 });
 // fullscreen on-video controls (translucent; shown only while in fullscreen)
 const syncFsIcons = () => { $('#fsPlay').textContent = V.paused ? '▶' : '⏸'; $('#fsMute').textContent = V.muted ? '🔇' : '🔊'; $('#fsLive').classList.toggle('on', !!liveCtl); };
-function toggleFsOverlay() { $('#fsctrl').classList.toggle('hide', !document.fullscreenElement); syncFsIcons(); }
+function toggleFsOverlay() { $('#fsctrl').classList.toggle('hide', !inFullscreen()); syncFsIcons(); }
 $('#fsPlay').onclick = () => { if (liveCtl) return; V.paused ? V.play() : V.pause(); };
 $('#fsMute').onclick = () => { $('#mute').click(); };
 $('#fsRotT').onclick = () => rotateLens('top');
 $('#fsRotB').onclick = () => rotateLens('bottom');
 $('#fsLive').onclick = () => { startLive(); setTimeout(syncFsIcons, 150); };
-$('#fsExit').onclick = () => document.exitFullscreen?.();
+$('#fsExit').onclick = () => exitFs();
 
 V.muted = true;
 loadPrefs(); setLayout(state.layout);   // restore last-used rotation + layout (also used in fullscreen)
