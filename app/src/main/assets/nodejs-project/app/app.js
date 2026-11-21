@@ -217,6 +217,9 @@ function setLayout(l) {
 
 // ---------- tabs (Live view / Recordings) ----------
 function setTab(t) {
+  // Live and recordings share one <video> and one camera channel — browsing recordings while a live
+  // stream is still open can make the clip fetch block. Stop live when entering the Recordings tab.
+  if (t === 'rec' && liveCtl) stopLive();
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
   $('#panel-live').classList.toggle('hide', t !== 'live');
   $('#panel-rec').classList.toggle('hide', t !== 'rec');

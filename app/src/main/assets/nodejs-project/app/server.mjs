@@ -2,7 +2,7 @@
 // Endpoints: /api/discover, /api/days, /api/segments, /api/clip (MP4, cached, range-enabled).
 import http from 'node:http';
 import os from 'node:os';
-import { readFile, writeFile, mkdir, stat, open } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, stat, open, rename, readdir, unlink } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import { join, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -14,6 +14,14 @@ const PORT = 8777;
 const LAN_PASS = process.env.V380_LAN_PASS ?? 'origin';
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.mp4': 'video/mp4', '.ico': 'image/x-icon' };
 await mkdir(CACHE, { recursive: true });
+// Purge the clip cache on startup. A clip write interrupted by the app being killed (or a decode that
+// returned a short/empty buffer) can leave a partial .mp4 that stat() still accepts — which would then be
+// served on every replay and never decode, so playback "spins forever". Clips re-fetch on demand, so
+// dropping them here is safe and self-heals that stuck state.
+try {
+  for (const f of await readdir(CACHE)) { try { await unlink(join(CACHE, f)); } catch {} }
+  console.log('clip cache purged on startup');
+} catch {}
 
 // Candidate camera-setting catalog. The /api/settings endpoint probes these and returns only the ones
 // THIS camera reports as supported (code 1000), with current values. Enum labels are best-effort; the
@@ -135,12 +143,17 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/clip') {
       const day = q.get('day'), idx = +q.get('idx'), max = +(q.get('max') || 0);
       const cacheFile = join(CACHE, `${ip}_${day}_${idx}_${max || 'full'}.mp4`);
-      try { await stat(cacheFile); return serveFileRange(req, res, cacheFile); } catch {}
+      // Only serve a cached clip if it's a plausibly-complete file; a tiny leftover is treated as a miss.
+      try { const st = await stat(cacheFile); if (st.size > 1024) return serveFileRange(req, res, cacheFile); } catch {}
       const sess = await getSession(ip);
       const segs = await lib.listSegments(ip, sess, day); const seg = segs[idx];
       if (!seg) return json(res, { error: 'segment not found' }, 404);
       const { mp4 } = await lib.fetchSegmentMp4(ip, sess, seg, { maxFrames: max });
-      await writeFile(cacheFile, mp4);
+      if (!mp4 || mp4.length < 1024) return json(res, { error: 'camera returned an empty recording' }, 502);
+      // Write atomically (temp + rename) so a crash mid-write never leaves a partial file that stat() accepts.
+      const tmp = cacheFile + '.part';
+      await writeFile(tmp, mp4);
+      await rename(tmp, cacheFile);
       return serveFileRange(req, res, cacheFile);
     }
     json(res, { error: 'unknown endpoint' }, 404);
