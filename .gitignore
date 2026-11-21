@@ -26,3 +26,7 @@ credentials*
 
 # Session screenshots (scratch)
 shot-*.png
+
+# session screenshots (scratch)
+/*.jpg
+/*.png

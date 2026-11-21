@@ -2,6 +2,7 @@ package com.drvision.cctv
 
 import android.app.Activity
 import android.content.Context
+import android.content.Intent
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Bundle
@@ -10,6 +11,7 @@ import android.util.Log
 import android.view.View
 import android.view.WindowInsets
 import android.view.WindowInsetsController
+import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -86,8 +88,28 @@ class MainActivity : Activity() {
         }
         Log.i(TAG, "multicast lock held=${multicastLock?.isHeld}")
 
+        webView.addJavascriptInterface(WebBridge(), "AndroidSetup")
+
         startNodeOnce()
         waitForServerThenLoad()
+    }
+
+    /** Exposed to the web UI as window.AndroidSetup — launches the native BLE setup screen. */
+    inner class WebBridge {
+        @JavascriptInterface
+        fun startBleSetup() {
+            runOnUiThread { startActivityForResult(Intent(this@MainActivity, BleSetupActivity::class.java), 101) }
+        }
+        @JavascriptInterface
+        fun available(): Boolean = true
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 101 && resultCode == RESULT_OK) {
+            // camera just provisioned — reload so the UI re-discovers it
+            runOnUiThread { webView.reload() }
+        }
     }
 
     private fun startNodeOnce() {

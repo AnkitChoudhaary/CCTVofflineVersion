@@ -20,8 +20,8 @@
   .seg button{background:none;border:0;color:var(--mut);padding:10px 15px;cursor:pointer;font:inherit}
   .seg button.on{background:var(--accent);color:#061320;font-weight:600}
   /* camera picker bar */
-  .camerabar{display:flex;gap:8px;align-items:center;padding:8px 14px;background:var(--panel);border-bottom:1px solid var(--line)}
-  .camerabar select{flex:1;background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:10px;font:inherit}
+  .camerabar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 14px;background:var(--panel);border-bottom:1px solid var(--line)}
+  .camerabar select{flex:1 1 150px;min-width:140px;background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:10px;font:inherit}
   .camerabar .btn{flex:none;white-space:nowrap;background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:10px 14px;font:inherit;cursor:pointer}
   .camerabar .btn:active{border-color:var(--accent)}
   /* tabs */
@@ -104,7 +104,23 @@
   .fsctrl{position:absolute;inset:0;z-index:9;pointer-events:none}
   .fsctrl.hide{display:none}
   .fsctrl>*{pointer-events:auto}
-  .fsptz{position:absolute;left:18px;bottom:18px;display:grid;grid-template-columns:repeat(3,52px);grid-auto-rows:52px;gap:7px;opacity:.65;transition:opacity .2s}
+  /* on-lens translucent pan/tilt — thin chevrons at the 4 edge centers of the motorised (bottom) lens.
+     LIVE only; shows in normal + fullscreen. No boxes, no home button; 46px invisible tap targets. */
+  .lensptz{position:absolute;inset:0;z-index:7;pointer-events:none}
+  .lensptz.hide{display:none!important}
+  .lensptz .pz{position:absolute;width:46px;height:46px;padding:0;margin:0;background:none;border:0;cursor:pointer;pointer-events:auto;display:flex;align-items:center;justify-content:center;opacity:.55;transition:opacity .15s}
+  .lensptz .pz:active{opacity:1}
+  .lensptz .pz .chev{width:15px;height:15px;border-right:2.6px solid #fff;border-bottom:2.6px solid #fff;filter:drop-shadow(0 1px 2px rgba(0,0,0,.85))}
+  .lensptz .up{top:1px;left:50%;transform:translateX(-50%)}
+  .lensptz .down{bottom:1px;left:50%;transform:translateX(-50%)}
+  .lensptz .left{left:1px;top:50%;transform:translateY(-50%)}
+  .lensptz .right{right:1px;top:50%;transform:translateY(-50%)}
+  .lensptz .up .chev{transform:rotate(-135deg);margin-top:5px}
+  .lensptz .down .chev{transform:rotate(45deg);margin-bottom:5px}
+  .lensptz .left .chev{transform:rotate(135deg);margin-left:5px}
+  .lensptz .right .chev{transform:rotate(-45deg);margin-right:5px}
+  .fsptz{display:none!important} /* replaced by the on-lens pad, which also shows in fullscreen */
+  .fsptz-legacy{position:absolute;left:18px;bottom:18px;display:grid;grid-template-columns:repeat(3,52px);grid-auto-rows:52px;gap:7px;opacity:.65;transition:opacity .2s}
   .fsptz button{background:#000a;border:1px solid #ffffff55;color:#fff;border-radius:10px;font-size:18px;cursor:pointer;-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
   .fsptz button.sp{visibility:hidden;border:0;background:none}
   .fsptz button[data-fshome]{background:#4aa3ffcc;color:#061320;border-color:transparent}
@@ -143,6 +159,7 @@
 
 <div class="camerabar">
   <select id="cams"><option value="">Searching…</option></select>
+  <button class="btn" id="addCam" title="Add a new camera over Bluetooth">＋ Add</button>
   <button class="btn" id="rescan" title="Rescan the hotspot for cameras">⟳ Rescan</button>
 </div>
 
@@ -154,7 +171,14 @@
 <div class="stage" id="stage">
   <div class="view" id="view">
     <div class="lens" id="lensTop"><span class="tag">Lens 1 (top)</span><canvas></canvas><button class="rot" data-k="top" title="Rotate this view 90°">⟳</button><span class="z">1.0×</span></div>
-    <div class="lens" id="lensBottom"><span class="tag">Lens 2 (bottom)</span><canvas></canvas><button class="rot" data-k="bottom" title="Rotate this view 90°">⟳</button><span class="z">1.0×</span></div>
+    <div class="lens" id="lensBottom"><span class="tag">Lens 2 (bottom)</span><canvas></canvas><button class="rot" data-k="bottom" title="Rotate this view 90°">⟳</button><span class="z">1.0×</span>
+      <div class="lensptz hide" id="lensPtz" title="Pan / tilt (live)">
+        <button class="pz up" data-dir="up" aria-label="Tilt up"><i class="chev"></i></button>
+        <button class="pz down" data-dir="down" aria-label="Tilt down"><i class="chev"></i></button>
+        <button class="pz left" data-dir="left" aria-label="Pan left"><i class="chev"></i></button>
+        <button class="pz right" data-dir="right" aria-label="Pan right"><i class="chev"></i></button>
+      </div>
+    </div>
     <div class="load hide" id="load"><div class="spin"></div><div id="loadtxt">Loading…</div></div>
     <div id="fsctrl" class="fsctrl hide">
       <div class="fsptz" title="Pan / tilt">

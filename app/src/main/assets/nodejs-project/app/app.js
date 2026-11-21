@@ -101,14 +101,16 @@ $('#timeline').addEventListener('click', e => {
 
 // ---------- live view (MSE + fMP4) ----------
 let liveCtl = null;
-function stopLive() { if (liveCtl) { liveCtl.abort?.(); liveCtl = null; } $('#liveBadge').classList.add('hide'); const lb = $('#live'); lb.classList.remove('on'); lb.textContent = '● Start live'; syncFsIcons(); }
+// translucent on-lens pan/tilt pad (bottom/motorised lens) — shown LIVE only, in normal + fullscreen
+function updateLensPtz() { const el = document.querySelector('#lensPtz'); if (el) el.classList.toggle('hide', !liveCtl); }
+function stopLive() { if (liveCtl) { liveCtl.abort?.(); liveCtl = null; } $('#liveBadge').classList.add('hide'); const lb = $('#live'); lb.classList.remove('on'); lb.textContent = '● Start live'; updateLensPtz(); syncFsIcons(); }
 async function startLive() {
   if (!state.ip) { setStatus('connect to a camera first', 'err'); return; }
   const wasLive = !!liveCtl;
   stopLive(); setTab('live'); document.querySelectorAll('.segrow').forEach(r => r.classList.remove('on'));
   resetZoom(); $('#load').classList.remove('hide'); $('#loadtxt').textContent = 'Connecting to live stream…';
   setStatus('starting live…'); $('#liveBadge').classList.remove('hide'); const lb = $('#live'); lb.classList.add('on'); lb.textContent = '■ Stop live';
-  const ac = new AbortController(); liveCtl = ac;
+  const ac = new AbortController(); liveCtl = ac; updateLensPtz();
   const ms = new MediaSource(); V.src = URL.createObjectURL(ms);
   await new Promise(r => ms.addEventListener('sourceopen', r, { once: true }));
   const codec = state.hd ? 'video/mp4; codecs="avc1.640033,mp4a.40.2"' : 'video/mp4; codecs="avc1.64001f,mp4a.40.2"';
@@ -227,6 +229,10 @@ $('#live').onclick = () => { if (liveCtl) stopLive(); else startLive(); };
 state.hd = false;
 document.querySelectorAll('#quality button').forEach(b => b.onclick = () => { document.querySelectorAll('#quality button').forEach(x => x.classList.toggle('on', x === b)); state.hd = b.dataset.q === 'hd'; if (liveCtl) startLive(); });
 $('#rescan').onclick = rescan;
+{ const ab = document.querySelector('#addCam'); if (ab) ab.onclick = () => {
+  if (window.AndroidSetup && window.AndroidSetup.startBleSetup) AndroidSetup.startBleSetup();
+  else setStatus('Bluetooth camera setup is available in the Android app only.', 'err');
+}; }
 $('#cams').onchange = e => selectCamera(e.target.value);
 $('#days').onchange = e => selectDay(e.target.value);
 document.querySelectorAll('#layout button').forEach(b => b.onclick = () => setLayout(b.dataset.l));
